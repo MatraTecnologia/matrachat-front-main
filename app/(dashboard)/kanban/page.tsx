@@ -412,7 +412,7 @@ export default function KanbanPage() {
         try {
             const [tagsRes, contactsRes] = await Promise.all([
                 api.get('/tags', { params: { orgId: id } }),
-                api.get('/contacts', { params: { orgId: id, limit: 500 } }),
+                api.get('/contacts', { params: { limit: 500 } }),
             ])
             setTags(tagsRes.data)
             setContacts(contactsRes.data.contacts ?? [])

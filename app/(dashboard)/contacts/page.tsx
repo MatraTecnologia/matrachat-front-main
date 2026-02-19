@@ -118,7 +118,7 @@ function ContactDialog({ open, onClose, onSaved, orgId, contact }: {
                 toast.success('Contato atualizado.')
             } else {
                 await api.post('/contacts', {
-                    orgId, name: form.name.trim(),
+                    name: form.name.trim(),
                     phone: form.phone.trim() || undefined,
                     email: form.email.trim() || undefined,
                     notes: form.notes.trim() || undefined,
@@ -236,7 +236,7 @@ export default function ContactsPage() {
         setLoading(true)
         try {
             const { data } = await api.get<ContactsResponse>('/contacts', {
-                params: { orgId: id, search: q || undefined, page: p, limit: LIMIT },
+                params: { search: q || undefined, page: p, limit: LIMIT },
             })
             setContacts(data.contacts)
             setTotal(data.total)

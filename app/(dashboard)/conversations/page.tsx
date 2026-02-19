@@ -310,7 +310,7 @@ function ConversationList({
         setSearchLoading(true)
         const timer = setTimeout(async () => {
             try {
-                const { data } = await api.get('/contacts', { params: { orgId, search, limit: 50 } })
+                const { data } = await api.get('/contacts', { params: { search, limit: 50 } })
                 setSearchResults(data.contacts)
             } catch {
                 setSearchResults(null)
@@ -329,12 +329,12 @@ function ConversationList({
         if (!orgId) return
         if (action === 'resolve') {
             try {
-                await api.patch(`/contacts/${contact.id}/resolve`, { orgId })
+                await api.patch(`/contacts/${contact.id}/resolve`)
                 onContactUpdated({ id: contact.id, convStatus: 'resolved', assignedToId: null, assignedTo: null })
             } catch { /* silencioso */ }
         } else {
             try {
-                await api.patch(`/contacts/${contact.id}/open`, { orgId })
+                await api.patch(`/contacts/${contact.id}/open`)
                 onContactUpdated({ id: contact.id, convStatus: 'open' })
             } catch { /* silencioso */ }
         }
@@ -652,7 +652,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
 
         // Ao abrir uma conversa pendente, marca como "open" automaticamente
         if (contact.convStatus === 'pending') {
-            api.patch(`/contacts/${contact.id}/open`, { orgId })
+            api.patch(`/contacts/${contact.id}/open`)
                 .then(() => onContactUpdated({ id: contact.id, convStatus: 'open' }))
                 .catch(() => null)
         }
@@ -729,7 +729,6 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         setAssigning(true)
         try {
             const { data } = await api.patch(`/contacts/${contact.id}/assign`, {
-                orgId,
                 assignedToId: memberId,
             })
             const member = members.find((m) => m.id === memberId) ?? null
@@ -746,7 +745,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     async function handleResolve() {
         setResolving(true)
         try {
-            await api.patch(`/contacts/${contact.id}/resolve`, { orgId })
+            await api.patch(`/contacts/${contact.id}/resolve`)
             onContactUpdated({ id: contact.id, convStatus: 'resolved', assignedToId: null, assignedTo: null })
         } catch { /* silencioso */ } finally {
             setResolving(false)
@@ -755,7 +754,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
 
     async function handleReopen() {
         try {
-            await api.patch(`/contacts/${contact.id}/open`, { orgId })
+            await api.patch(`/contacts/${contact.id}/open`)
             onContactUpdated({ id: contact.id, convStatus: 'open' })
         } catch { /* silencioso */ }
     }
@@ -1208,11 +1207,11 @@ function ConversationsPageInner() {
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
     const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null>(null)
 
-    const loadContacts = useCallback(async (id: string, tId?: string | null) => {
+    const loadContacts = useCallback(async (tId?: string | null) => {
         setLoading(true)
         try {
             const { data } = await api.get('/contacts', {
-                params: { orgId: id, limit: 500, hasMessages: true, ...(tId ? { tagId: tId } : {}), ...(ownOnly && userId ? { assignedToUserId: userId } : {}) },
+                params: { limit: 500, hasMessages: true, ...(tId ? { tagId: tId } : {}), ...(ownOnly && userId ? { assignedToUserId: userId } : {}) },
             })
             setContacts(data.contacts)
         } catch {
@@ -1251,7 +1250,7 @@ function ConversationsPageInner() {
 
     useEffect(() => {
         if (orgId) {
-            loadContacts(orgId, tagFilter)
+            loadContacts(tagFilter)
             loadChannels(orgId)
             loadMembers(orgId)
             loadTags(orgId)
