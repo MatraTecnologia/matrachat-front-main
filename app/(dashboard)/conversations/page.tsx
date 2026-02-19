@@ -7,7 +7,7 @@ import {
     Check, CheckCheck, Clock, RefreshCw, User, Tag,
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
-    CheckCircle2, UserCircle2,
+    CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,7 +22,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
     ContextMenu, ContextMenuContent, ContextMenuItem,
-    ContextMenuSeparator, ContextMenuTrigger,
+    ContextMenuSeparator, ContextMenuTrigger, ContextMenuSub,
+    ContextMenuSubTrigger, ContextMenuSubContent,
 } from '@/components/ui/context-menu'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -189,13 +190,15 @@ function ContactModal({ contact, open, onClose }: { contact: Contact | null; ope
 // ─── ContactItem ──────────────────────────────────────────────────────────────
 
 function ContactItem({
-    contact, active, onClick, unreadCount, onContextAction,
+    contact, active, onClick, unreadCount, onContextAction, members, tags,
 }: {
     contact: Contact
     active: boolean
     onClick: () => void
     unreadCount?: number
-    onContextAction: (action: 'view' | 'resolve' | 'reopen', contact: Contact) => void
+    onContextAction: (action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email', contact: Contact, payload?: string) => void
+    members: MemberRef[]
+    tags: OrgTagRef[]
 }) {
     const hasUnread = (unreadCount ?? 0) > 0
     const inner = (
@@ -284,7 +287,7 @@ function ContactItem({
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>{inner}</ContextMenuTrigger>
-            <ContextMenuContent className="w-52">
+            <ContextMenuContent className="w-56">
                 <ContextMenuItem className="gap-2 text-xs" onClick={() => onContextAction('view', contact)}>
                     <User className="h-3.5 w-3.5" />Ver detalhes do contato
                 </ContextMenuItem>
@@ -293,6 +296,91 @@ function ContactItem({
                     <MessageSquare className="h-3.5 w-3.5" />Abrir conversa
                 </ContextMenuItem>
                 <ContextMenuSeparator />
+
+                {/* Atribuir agente */}
+                <ContextMenuSub>
+                    <ContextMenuSubTrigger className="gap-2 text-xs">
+                        <UserPlus className="h-3.5 w-3.5" />Atribuir agente
+                    </ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-48">
+                        {contact.assignedToId && (
+                            <>
+                                <ContextMenuItem className="gap-2 text-xs text-red-600 focus:text-red-600" onClick={() => onContextAction('unassign', contact)}>
+                                    <X className="h-3.5 w-3.5" />Remover atribuição
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                            </>
+                        )}
+                        {members.length === 0 ? (
+                            <ContextMenuItem disabled className="text-xs text-muted-foreground">
+                                Nenhum membro disponível
+                            </ContextMenuItem>
+                        ) : (
+                            members.map((m) => (
+                                <ContextMenuItem
+                                    key={m.id}
+                                    className="gap-2 text-xs"
+                                    onClick={() => onContextAction('assign', contact, m.id)}
+                                    disabled={contact.assignedToId === m.id}
+                                >
+                                    <UserCircle2 className="h-3.5 w-3.5" />
+                                    {m.name}
+                                    {contact.assignedToId === m.id && <Check className="ml-auto h-3 w-3" />}
+                                </ContextMenuItem>
+                            ))
+                        )}
+                    </ContextMenuSubContent>
+                </ContextMenuSub>
+
+                {/* Gerenciar etiquetas */}
+                <ContextMenuSub>
+                    <ContextMenuSubTrigger className="gap-2 text-xs">
+                        <Tags className="h-3.5 w-3.5" />Gerenciar etiquetas
+                    </ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-48">
+                        {tags.length === 0 ? (
+                            <ContextMenuItem disabled className="text-xs text-muted-foreground">
+                                Nenhuma etiqueta disponível
+                            </ContextMenuItem>
+                        ) : (
+                            tags.map((t) => {
+                                const hasTag = (contact.tags ?? []).some((ct) => ct.tag.id === t.id)
+                                return (
+                                    <ContextMenuItem
+                                        key={t.id}
+                                        className="gap-2 text-xs"
+                                        onClick={() => onContextAction(hasTag ? 'remove-tag' : 'add-tag', contact, t.id)}
+                                    >
+                                        <span
+                                            className="h-3 w-3 rounded-full border"
+                                            style={{ backgroundColor: t.color }}
+                                        />
+                                        {t.name}
+                                        {hasTag && <Check className="ml-auto h-3 w-3" />}
+                                    </ContextMenuItem>
+                                )
+                            })
+                        )}
+                    </ContextMenuSubContent>
+                </ContextMenuSub>
+
+                <ContextMenuSeparator />
+
+                {/* Copiar informações */}
+                {contact.phone && (
+                    <ContextMenuItem className="gap-2 text-xs" onClick={() => onContextAction('copy-phone', contact)}>
+                        <Copy className="h-3.5 w-3.5" />Copiar telefone
+                    </ContextMenuItem>
+                )}
+                {contact.email && (
+                    <ContextMenuItem className="gap-2 text-xs" onClick={() => onContextAction('copy-email', contact)}>
+                        <Copy className="h-3.5 w-3.5" />Copiar e-mail
+                    </ContextMenuItem>
+                )}
+
+                {(contact.phone || contact.email) && <ContextMenuSeparator />}
+
+                {/* Resolver/Reabrir */}
                 {contact.convStatus === 'resolved' ? (
                     <ContextMenuItem className="gap-2 text-xs text-blue-700 focus:text-blue-700" onClick={() => onContextAction('reopen', contact)}>
                         <RefreshCw className="h-3.5 w-3.5" />Reabrir conversa
@@ -313,7 +401,7 @@ type OrgTagRef = { id: string; name: string; color: string }
 
 function ConversationList({
     contacts, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
-    channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole,
+    channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole, members,
 }: {
     contacts: Contact[]
     loading: boolean
@@ -332,6 +420,7 @@ function ConversationList({
     orgId: string | null
     onContactUpdated: (updated: Partial<Contact> & { id: string }) => void
     userRole: string | null
+    members: MemberRef[]
 }) {
     const [search, setSearch] = useState('')
     const [modalContact, setModalContact] = useState<Contact | null>(null)
@@ -358,22 +447,101 @@ function ConversationList({
         return () => clearTimeout(timer)
     }, [search, orgId])
 
-    async function handleContextAction(action: 'view' | 'resolve' | 'reopen', contact: Contact) {
+    async function handleContextAction(action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email', contact: Contact, payload?: string) {
         if (action === 'view') {
             setModalContact(contact)
             return
         }
+
+        // Ações de copiar
+        if (action === 'copy-phone') {
+            if (contact.phone) {
+                await navigator.clipboard.writeText(contact.phone)
+                toast.success('Telefone copiado!')
+            }
+            return
+        }
+        if (action === 'copy-email') {
+            if (contact.email) {
+                await navigator.clipboard.writeText(contact.email)
+                toast.success('E-mail copiado!')
+            }
+            return
+        }
+
         if (!orgId) return
+
+        // Atribuir/desatribuir agente
+        if (action === 'assign' && payload) {
+            try {
+                await api.patch(`/contacts/${contact.id}`, { assignedToId: payload })
+                const agent = members.find((m) => m.id === payload)
+                onContactUpdated({
+                    id: contact.id,
+                    assignedToId: payload,
+                    assignedTo: agent ? { id: agent.id, name: agent.name, image: agent.image } : null
+                })
+                toast.success('Agente atribuído!')
+            } catch {
+                toast.error('Erro ao atribuir agente')
+            }
+            return
+        }
+        if (action === 'unassign') {
+            try {
+                await api.patch(`/contacts/${contact.id}`, { assignedToId: null })
+                onContactUpdated({ id: contact.id, assignedToId: null, assignedTo: null })
+                toast.success('Agente removido!')
+            } catch {
+                toast.error('Erro ao remover agente')
+            }
+            return
+        }
+
+        // Adicionar/remover tag
+        if (action === 'add-tag' && payload) {
+            try {
+                await api.post(`/contacts/${contact.id}/tags/${payload}`)
+                const tag = tags.find((t) => t.id === payload)
+                if (tag) {
+                    const updatedTags = [...(contact.tags ?? []), { tag }]
+                    onContactUpdated({ id: contact.id, tags: updatedTags as any })
+                    toast.success('Etiqueta adicionada!')
+                }
+            } catch {
+                toast.error('Erro ao adicionar etiqueta')
+            }
+            return
+        }
+        if (action === 'remove-tag' && payload) {
+            try {
+                await api.delete(`/contacts/${contact.id}/tags/${payload}`)
+                const updatedTags = (contact.tags ?? []).filter((ct) => ct.tag.id !== payload)
+                onContactUpdated({ id: contact.id, tags: updatedTags as any })
+                toast.success('Etiqueta removida!')
+            } catch {
+                toast.error('Erro ao remover etiqueta')
+            }
+            return
+        }
+
+        // Resolver/reabrir conversa
         if (action === 'resolve') {
             try {
                 await api.patch(`/contacts/${contact.id}/resolve`)
                 onContactUpdated({ id: contact.id, convStatus: 'resolved', assignedToId: null, assignedTo: null })
-            } catch { /* silencioso */ }
-        } else {
+                toast.success('Conversa resolvida!')
+            } catch {
+                toast.error('Erro ao resolver conversa')
+            }
+        } else if (action === 'reopen') {
             try {
                 await api.patch(`/contacts/${contact.id}/open`)
                 onContactUpdated({ id: contact.id, convStatus: 'open' })
-            } catch { /* silencioso */ }
+                toast.success('Conversa reaberta!')
+            } catch {
+                toast.error('Erro ao reabrir conversa')
+            }
         }
     }
 
@@ -525,6 +693,8 @@ function ConversationList({
                         onClick={() => onSelect(c)}
                         unreadCount={unreadIds.get(c.id) ?? 0}
                         onContextAction={handleContextAction}
+                        members={members}
+                        tags={tags}
                     />
                 ))}
             </div>
@@ -1449,6 +1619,7 @@ function ConversationsPageInner() {
                 orgId={orgId}
                 onContactUpdated={handleContactUpdated}
                 userRole={perms?.role ?? null}
+                members={members}
             />
             <div className="flex flex-1 overflow-hidden">
                 {selected && orgId
