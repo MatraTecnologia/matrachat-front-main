@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import {
     Settings, Users, Building2, Loader2, Trash2, ShieldCheck, Tag, Plus, X, Facebook, Eye, EyeOff, Copy, Check, MessageCircle, Download, Upload, Link2, ImageOff,
     UserPlus, Mail, KeyRound, Shield, ShieldAlert, UserCog, MoreHorizontal, CheckCircle2, Clock, Search, ChevronDown,
@@ -29,7 +30,7 @@ import { toast } from 'sonner'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'organization' | 'members' | 'roles' | 'tags' | 'facebook' | 'appearance'
+type Tab = 'organization' | 'members' | 'roles' | 'tags' | 'facebook' | 'appearance' | 'email-templates'
 
 type OrgTag = {
     id: string
@@ -1651,6 +1652,161 @@ function FacebookTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => vo
     )
 }
 
+// ─── Aba: Templates de E-mail ─────────────────────────────────────────────────
+
+const EMAIL_TEMPLATE_TYPES: Record<string, { label: string; vars: string[] }> = {
+    'verification':        { label: 'Verificação de e-mail',   vars: ['{{name}}', '{{url}}'] },
+    'magic-link':          { label: 'Link mágico',             vars: ['{{url}}'] },
+    'reset-password':      { label: 'Redefinição de senha',    vars: ['{{name}}', '{{url}}'] },
+    'otp-sign-in':         { label: 'Código OTP (login)',       vars: ['{{otp}}'] },
+    'otp-verification':    { label: 'Código OTP (verificação)', vars: ['{{otp}}'] },
+    'otp-forget-password': { label: 'Código OTP (senha)',       vars: ['{{otp}}'] },
+}
+
+// Editor Unlayer carregado apenas no cliente (não tem suporte a SSR)
+const EmailEditor = dynamic(() => import('react-email-editor'), { ssr: false, loading: () => <div className="flex-1 flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> })
+
+function EmailTemplatesTab({ org }: { org: Org }) {
+    const [selectedType, setSelectedType] = useState(Object.keys(EMAIL_TEMPLATE_TYPES)[0])
+    const [subject, setSubject] = useState('')
+    const [saving, setSaving] = useState(false)
+    const [deleting, setDeleting] = useState(false)
+    const [hasCustom, setHasCustom] = useState(false)
+    const editorRef = useRef<{ editor: { exportHtml: (cb: (data: { html: string; design: object }) => void) => void; loadDesign: (d: object) => void } } | null>(null)
+
+    // Carrega template existente quando o tipo muda
+    useEffect(() => {
+        setHasCustom(false)
+        setSubject('')
+        api.get(`/email-templates/${selectedType}`, { params: { orgId: org.id } })
+            .then(({ data }) => {
+                if (data) {
+                    setSubject(data.subject)
+                    setHasCustom(true)
+                    if (data.design && editorRef.current?.editor) {
+                        editorRef.current.editor.loadDesign(data.design)
+                    }
+                }
+            })
+            .catch(() => null)
+    }, [selectedType, org.id])
+
+    async function handleSave() {
+        if (!editorRef.current?.editor) return
+        setSaving(true)
+        editorRef.current.editor.exportHtml(async ({ html, design }) => {
+            try {
+                await api.put(`/email-templates/${selectedType}`, {
+                    orgId: org.id,
+                    subject: subject || EMAIL_TEMPLATE_TYPES[selectedType].label,
+                    html,
+                    design,
+                })
+                setHasCustom(true)
+                toast.success('Template salvo com sucesso!')
+            } catch {
+                toast.error('Erro ao salvar template.')
+            } finally {
+                setSaving(false)
+            }
+        })
+    }
+
+    async function handleDelete() {
+        setDeleting(true)
+        try {
+            await api.delete(`/email-templates/${selectedType}`, { params: { orgId: org.id } })
+            setHasCustom(false)
+            setSubject('')
+            toast.success('Template removido. Usando padrão do sistema.')
+        } catch {
+            toast.error('Erro ao remover template.')
+        } finally {
+            setDeleting(false)
+        }
+    }
+
+    const typeInfo = EMAIL_TEMPLATE_TYPES[selectedType]
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-lg font-semibold">Templates de E-mail</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                    Personalize os e-mails enviados pelo sistema usando o editor visual.
+                    Use as variáveis disponíveis para inserir dados dinâmicos.
+                </p>
+            </div>
+
+            {/* Seletor de tipo */}
+            <div className="flex flex-wrap gap-4 items-end">
+                <div className="space-y-1.5 min-w-[220px]">
+                    <Label>Tipo de e-mail</Label>
+                    <Select value={selectedType} onValueChange={setSelectedType}>
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Object.entries(EMAIL_TEMPLATE_TYPES).map(([key, { label }]) => (
+                                <SelectItem key={key} value={key}>{label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-1.5 flex-1 min-w-[200px]">
+                    <Label>Assunto do e-mail</Label>
+                    <Input
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        placeholder={`ex: ${typeInfo.label} - Matra Chat`}
+                    />
+                </div>
+            </div>
+
+            {/* Variáveis disponíveis */}
+            <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground">Variáveis disponíveis:</span>
+                {typeInfo.vars.map((v) => (
+                    <code
+                        key={v}
+                        className="text-xs bg-muted px-2 py-0.5 rounded font-mono cursor-pointer hover:bg-primary/10"
+                        title="Clique para copiar"
+                        onClick={() => { navigator.clipboard.writeText(v); toast.success(`${v} copiado!`) }}
+                    >
+                        {v}
+                    </code>
+                ))}
+            </div>
+
+            {/* Editor Unlayer */}
+            <div className="rounded-lg border overflow-hidden" style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
+                <EmailEditor
+                    ref={editorRef as React.RefObject<unknown>}
+                    minHeight={600}
+                    options={{ locale: 'pt-BR', features: { textEditor: { spellChecker: false } } }}
+                />
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center gap-3">
+                <Button onClick={handleSave} disabled={saving}>
+                    {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    Salvar template
+                </Button>
+                {hasCustom && (
+                    <Button variant="outline" onClick={handleDelete} disabled={deleting}>
+                        {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                        Restaurar padrão
+                    </Button>
+                )}
+                <span className="text-xs text-muted-foreground ml-auto">
+                    {hasCustom ? '✅ Template personalizado ativo' : 'Usando template padrão do sistema'}
+                </span>
+            </div>
+        </div>
+    )
+}
+
 // ─── Aba: Aparência do Login ───────────────────────────────────────────────────
 
 const BG_PRESETS = [
@@ -2020,6 +2176,14 @@ export default function SettingsPage() {
                         onClick={() => setTab('appearance')}
                     />
                 )}
+                {canSettings && (
+                    <SidebarItem
+                        icon={Mail}
+                        label="E-mails"
+                        active={tab === 'email-templates'}
+                        onClick={() => setTab('email-templates')}
+                    />
+                )}
             </aside>
 
             {/* Content */}
@@ -2037,6 +2201,7 @@ export default function SettingsPage() {
                         {tab === 'tags' && (canTags ? <TagsTab org={org} /> : <NoPermission />)}
                         {tab === 'facebook' && (canSettings ? <FacebookTab org={org} onSaved={(updated) => setOrg((prev) => prev ? { ...prev, ...updated } : updated)} /> : <NoPermission />)}
                         {tab === 'appearance' && (canSettings ? <AppearanceTab org={org} onSaved={(updated) => setOrg((prev) => prev ? { ...prev, ...updated } : updated)} /> : <NoPermission />)}
+                        {tab === 'email-templates' && (canSettings ? <EmailTemplatesTab org={org} /> : <NoPermission />)}
                     </>
                 )}
             </div>
