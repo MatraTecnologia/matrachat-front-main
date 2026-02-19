@@ -224,23 +224,59 @@ function ContactItem({
                     <span className={cn('text-sm truncate', hasUnread ? 'font-semibold' : 'font-medium')}>
                         {contact.name}
                     </span>
-                    {contact.channel && (
-                        <ChannelIcon
-                            type={contact.channel.type}
-                            className={cn('h-3.5 w-3.5 shrink-0', contact.channel.type === 'whatsapp' ? 'text-green-600' : 'text-blue-600')}
-                        />
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                        {/* Status badge */}
+                        {contact.convStatus === 'resolved' && (
+                            <span className="h-5 w-5 flex items-center justify-center rounded-full bg-green-100 border border-green-300" title="Resolvido">
+                                <CheckCircle2 className="h-3 w-3 text-green-600" />
+                            </span>
+                        )}
+                        {contact.convStatus === 'pending' && (
+                            <span className="h-5 w-5 flex items-center justify-center rounded-full bg-yellow-100 border border-yellow-300" title="Pendente">
+                                <Clock className="h-3 w-3 text-yellow-600" />
+                            </span>
+                        )}
+                        {/* Channel icon */}
+                        {contact.channel && (
+                            <ChannelIcon
+                                type={contact.channel.type}
+                                className={cn('h-3.5 w-3.5', contact.channel.type === 'whatsapp' ? 'text-green-600' : 'text-blue-600')}
+                            />
+                        )}
+                    </div>
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
                     <p className="text-xs text-muted-foreground truncate flex-1">
                         {contact.phone ?? contact.email ?? 'Sem contato'}
                     </p>
                     {contact.assignedTo && (
-                        <span className="text-[10px] text-muted-foreground shrink-0 bg-muted rounded px-1">
+                        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground shrink-0 bg-muted rounded-full px-1.5 py-0.5" title={`Atribuído a ${contact.assignedTo.name}`}>
+                            <UserCircle2 className="h-2.5 w-2.5" />
                             {contact.assignedTo.name.split(' ')[0]}
                         </span>
                     )}
                 </div>
+                {/* Tags */}
+                {(contact.tags ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                        {(contact.tags ?? []).slice(0, 3).map((ct) => (
+                            <span
+                                key={ct.tag.id}
+                                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                                style={{ backgroundColor: ct.tag.color + '22', color: ct.tag.color }}
+                                title={ct.tag.name}
+                            >
+                                <Tag className="h-2.5 w-2.5" />
+                                {ct.tag.name}
+                            </span>
+                        ))}
+                        {(contact.tags ?? []).length > 3 && (
+                            <span className="text-[10px] text-muted-foreground px-1" title={`${(contact.tags ?? []).length - 3} tags adicionais`}>
+                                +{(contact.tags ?? []).length - 3}
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
         </button>
     )
