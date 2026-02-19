@@ -1696,7 +1696,7 @@ function EmailTemplatesTab({ org }: { org: Org }) {
     async function handleSave() {
         if (!editorRef.current?.editor) return
         setSaving(true)
-        editorRef.current.editor.exportHtml(async ({ html, design }) => {
+        editorRef.current.editor.exportHtml(async ({ html, design }: { html: string; design: object }) => {
             try {
                 await api.put(`/email-templates/${selectedType}`, {
                     orgId: org.id,
