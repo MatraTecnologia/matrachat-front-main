@@ -276,10 +276,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [sidebarTags, setSidebarTags] = useState<SidebarTag[]>([])
 
     useEffect(() => {
-        api.get('/organizations')
+        api.get('/organizations/current')
             .then(({ data }) => {
-                if (!Array.isArray(data) || data.length === 0) return
-                const org = data[0]
+                const org = data
                 const cached = JSON.parse(localStorage.getItem('matrachat.appearance') || '{}')
                 setOrgId(org.id)
                 setOrgName(org.name ?? '')

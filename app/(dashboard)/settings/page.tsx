@@ -189,7 +189,7 @@ function OrgTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => void })
     async function handleSave() {
         setSaving(true)
         try {
-            const { data } = await api.patch(`/organizations/${org.id}`, {
+            const { data } = await api.patch('/organizations/current', {
                 name:    name.trim() || undefined,
                 logo:    logo.trim() || undefined,
                 logoBg:  logoBg !== 'transparent' ? logoBg : null,
@@ -1532,7 +1532,7 @@ function FacebookTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => vo
     async function handleSave() {
         setSaving(true)
         try {
-            const { data } = await api.patch(`/organizations/${org.id}`, {
+            const { data } = await api.patch('/organizations/current', {
                 fbAppId:     fbAppId.trim()     || null,
                 fbAppSecret: fbAppSecret.trim() || null,
             })
@@ -1868,7 +1868,7 @@ function AppearanceTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => 
     async function handleSave() {
         setSaving(true)
         try {
-            const { data } = await api.patch(`/organizations/${org.id}`, {
+            const { data } = await api.patch('/organizations/current', {
                 authSideImage: sideImage.trim() || null,
                 authBg: authBg || null,
             })
@@ -2089,23 +2089,16 @@ export default function SettingsPage() {
 
     useEffect(() => {
         Promise.all([
-            api.get('/organizations'),
+            api.get('/organizations/current'),
             api.get('/users/me'),
-        ]).then(([orgsRes, userRes]) => {
-            const orgs = orgsRes.data
+        ]).then(([orgRes, userRes]) => {
+            const org = orgRes.data
             const uid: string = userRes.data.id
             setCurrentUserId(uid)
-            if (Array.isArray(orgs) && orgs.length > 0) {
-                const org = orgs[0]
-                setOrg(org)
-                // Determina o papel do usuário logado nesta org via membros
-                api.get(`/organizations/${org.id}/members`)
-                    .then((r) => {
-                        const mine = (r.data as { role: Role; user: { id: string } }[]).find((m) => m.user.id === uid)
-                        if (mine) setMyRole(mine.role)
-                    })
-                    .catch(() => null)
-            }
+            setOrg(org)
+            // Determina o papel do usuário logado nesta org via membros
+            const mine = org.members?.find((m: { user: { id: string }; role: Role }) => m.user.id === uid)
+            if (mine) setMyRole(mine.role)
         }).catch(() => null).finally(() => setLoading(false))
     }, [])
 
