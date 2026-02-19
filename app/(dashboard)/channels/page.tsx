@@ -685,6 +685,17 @@ function AddChannelDialog({
     const [waUrl, setWaUrl] = useState('')
     const [waKey, setWaKey] = useState('')
     const [waLoading, setWaLoading] = useState(false)
+    const [hasDefaultKey, setHasDefaultKey] = useState(false)
+
+    // Pré-preenche URL e key com os defaults do servidor (env vars)
+    useEffect(() => {
+        api.get('/channels/evolution-defaults')
+            .then(({ data }) => {
+                if (data.evolutionUrl) setWaUrl(data.evolutionUrl)
+                if (data.hasDefaultKey) setHasDefaultKey(true)
+            })
+            .catch(() => null)
+    }, [])
 
     // QR
     const [channelId, setChannelId] = useState(reconnectChannel?.id ?? '')
@@ -723,7 +734,7 @@ function AddChannelDialog({
 
     // ── WhatsApp channel ─────────────────────────────────────────────────────
     async function createWhatsAppChannel() {
-        if (!waName.trim() || !waUrl.trim() || !waKey.trim()) {
+        if (!waName.trim() || !waUrl.trim() || (!waKey.trim() && !hasDefaultKey)) {
             toast.error('Preencha todos os campos.')
             return
         }
@@ -890,7 +901,17 @@ function AddChannelDialog({
                             </div>
                             <div className="space-y-1.5">
                                 <Label>API Key global</Label>
-                                <Input placeholder="sua-api-key" type="password" value={waKey} onChange={(e) => setWaKey(e.target.value)} />
+                                <Input
+                                    placeholder={hasDefaultKey ? '(usando chave padrão do servidor)' : 'sua-api-key'}
+                                    type="password"
+                                    value={waKey}
+                                    onChange={(e) => setWaKey(e.target.value)}
+                                />
+                                {hasDefaultKey && !waKey && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Chave padrão configurada no servidor. Deixe em branco para usá-la.
+                                    </p>
+                                )}
                             </div>
                             <p className="text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2">
                                 O nome da instância será gerado automaticamente com base no nome do canal.

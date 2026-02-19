@@ -505,13 +505,15 @@ export default function KanbanPage() {
     if (perms && !perms.permissions.canViewConversations) return <NoPermission />
 
 
-    const columns: (OrgTag | null)[] = [null, ...tags]
+    // Inclui "Sem tag" (null) apenas quando já existem tags, para não duplicar
+    // o estado vazio com a coluna vazia ao mesmo tempo
+    const columns: (OrgTag | null)[] = tags.length > 0 ? [null, ...tags] : []
 
     const totalContacts = contacts.length
 
     // Explicit width so overflow-x-auto scroll reaches the AddColumnButton
-    // columns + 1 (AddColumnButton), each 270px wide, gap-5 = 20px, px-6 = 48px, w-4 spacer = 16px
-    const colCount = columns.length + 1
+    // columns + 1 (empty state when no tags or just AddColumnButton), each 270px wide, gap-5 = 20px, px-6 = 48px, w-4 spacer = 16px
+    const colCount = columns.length + 1 + (tags.length === 0 ? 1 : 0)  // +1 for empty state placeholder when no tags
     const boardMinPx = colCount * 270 + (colCount - 1) * 20 + 48 + 16
 
     return (

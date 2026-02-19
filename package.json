@@ -25,6 +25,7 @@
     "react": "19.2.3",
     "react-day-picker": "^9.13.2",
     "react-dom": "19.2.3",
+    "react-email-editor": "^1.7.11",
     "react-hook-form": "^7.71.1",
     "react-resizable-panels": "^4.6.4",
     "recharts": "^2.15.4",
