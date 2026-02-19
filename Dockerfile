@@ -14,6 +14,11 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
+
+# Cache busting — invalida COPY quando o commit muda
+ARG GIT_SHA
+RUN echo "Building commit: $GIT_SHA"
+
 COPY . .
 
 # Variável de build — URL pública do backend
