@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -27,8 +27,10 @@ interface Organization {
     authBg?: string | null
 }
 
-export default function SignInPage() {
+function SignInPageInner() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const redirectTo = searchParams.get('redirect') || '/dashboard'
     const [status, setStatus] = useState<Status>('loading')
     const [organization, setOrganization] = useState<Organization | null>(null)
     const [detectedDomain, setDetectedDomain] = useState('')
@@ -99,7 +101,7 @@ export default function SignInPage() {
             await api.post('/auth/sign-in/email', { email, password })
             await joinOrgAfterLogin()
             toast.success('Login realizado com sucesso!')
-            router.push('/dashboard')
+            router.push(redirectTo)
         } catch (err) {
             const message = err instanceof Error ? err.message : ''
             // Better Auth retorna erro específico quando o e-mail não foi verificado
@@ -165,7 +167,7 @@ export default function SignInPage() {
             await api.post('/auth/sign-in/email-otp', { email: otpEmail, otp })
             await joinOrgAfterLogin()
             toast.success('Login realizado com sucesso!')
-            router.push('/dashboard')
+            router.push(redirectTo)
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Código inválido ou expirado.')
         } finally {
@@ -403,5 +405,13 @@ export default function SignInPage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+export default function SignInPage() {
+    return (
+        <Suspense>
+            <SignInPageInner />
+        </Suspense>
     )
 }
