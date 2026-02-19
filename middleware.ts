@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
         const hostname = request.nextUrl.hostname
 
         // Ignora validação em localhost/desenvolvimento
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
             return NextResponse.next()
         }
 
