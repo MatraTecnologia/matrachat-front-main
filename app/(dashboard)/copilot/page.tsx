@@ -299,7 +299,6 @@ function CreateDialog({ orgId, open, onClose, onCreate }: {
         try {
             const typeInfo = agentTypeInfo(type)
             const { data } = await api.post('/copilot/agents', {
-                orgId,
                 name: name.trim(),
                 type,
                 model,
@@ -595,7 +594,7 @@ function ChannelsTab({ agent, orgId, onSaved }: {
     const [saving, setSaving] = useState(false)
 
     useEffect(() => {
-        api.get('/channels', { params: { orgId } })
+        api.get('/channels')
             .then(({ data }) => setChannels(data))
             .catch(() => setChannels([]))
             .finally(() => setLoading(false))
@@ -993,10 +992,10 @@ export default function CopilotPage() {
     const [configured, setConfigured] = useState<AiAgent | null>(null)
     const [sheetOpen, setSheetOpen] = useState(false)
 
-    const loadAgents = useCallback(async (id: string) => {
+    const loadAgents = useCallback(async () => {
         setLoading(true)
         try {
-            const { data } = await api.get('/copilot/agents', { params: { orgId: id } })
+            const { data } = await api.get('/copilot/agents')
             setAgents(data)
         } catch {
             setAgents([])
@@ -1006,7 +1005,7 @@ export default function CopilotPage() {
     }, [])
 
     useEffect(() => {
-        if (orgId) loadAgents(orgId)
+        if (orgId) loadAgents()
     }, [orgId, loadAgents])
 
     function handleConfigure(agent: AiAgent) {

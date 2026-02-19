@@ -615,7 +615,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [tagMenuOpen, setTagMenuOpen] = useState(false)
 
     useEffect(() => {
-        api.get('/tags', { params: { orgId } })
+        api.get('/tags')
             .then(({ data }) => setAllTags(data))
             .catch(() => null)
     }, [orgId])
@@ -1223,16 +1223,16 @@ function ConversationsPageInner() {
         }
     }, [ownOnly, userId])
 
-    const loadChannels = useCallback(async (id: string) => {
+    const loadChannels = useCallback(async () => {
         try {
-            const { data } = await api.get('/channels', { params: { orgId: id } })
+            const { data } = await api.get('/channels')
             setWaChannels((data as ChannelRef[]).filter((c) => c.type === 'whatsapp' && c.status === 'connected'))
         } catch { setWaChannels([]) }
     }, [])
 
-    const loadMembers = useCallback(async (id: string) => {
+    const loadMembers = useCallback(async () => {
         try {
-            const { data } = await api.get('/agent/members', { params: { orgId: id } })
+            const { data } = await api.get('/agent/members')
             const flat: MemberRef[] = (data as RawMember[]).map((m) => ({
                 id:    m.user.id,
                 name:  m.user.name,
@@ -1243,9 +1243,9 @@ function ConversationsPageInner() {
         } catch { setMembers([]) }
     }, [])
 
-    const loadTags = useCallback(async (id: string) => {
+    const loadTags = useCallback(async () => {
         try {
-            const { data } = await api.get('/tags', { params: { orgId: id } })
+            const { data } = await api.get('/tags')
             setTags(data)
         } catch { setTags([]) }
     }, [])
@@ -1253,9 +1253,9 @@ function ConversationsPageInner() {
     useEffect(() => {
         if (orgId) {
             loadContacts(tagFilter)
-            loadChannels(orgId)
-            loadMembers(orgId)
-            loadTags(orgId)
+            loadChannels()
+            loadMembers()
+            loadTags()
         }
     }, [orgId, tagFilter, loadContacts, loadChannels, loadMembers, loadTags])
 

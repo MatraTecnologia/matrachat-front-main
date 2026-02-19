@@ -845,9 +845,9 @@ export default function RulesPage() {
         setLoading(true)
         try {
             const [agentsRes, membersRes, tagsRes] = await Promise.all([
-                api.get('/copilot/agents',           { params: { orgId: id } }),
+                api.get('/copilot/agents'),
                 api.get(`/organizations/${id}/members`),
-                api.get('/tags',                     { params: { orgId: id } }),
+                api.get('/tags'),
             ])
             const agentList: AiAgent[] = agentsRes.data
             setAgents(agentList)

@@ -666,13 +666,11 @@ function AddChannelDialog({
     onClose,
     onCreated,
     reconnectChannel,
-    orgId,
 }: {
     open: boolean
     onClose: () => void
     onCreated: (ch: Channel) => void
     reconnectChannel?: Channel
-    orgId: string
 }) {
     const [step, setStep] = useState<WizardStep>(reconnectChannel ? 'whatsapp-qr' : 'pick-type')
 
@@ -722,7 +720,7 @@ function AddChannelDialog({
         if (!apiName.trim()) return
         setApiLoading(true)
         try {
-            const { data } = await api.post('/channels', { orgId, name: apiName.trim(), type: 'api' })
+            const { data } = await api.post('/channels', { name: apiName.trim(), type: 'api' })
             onCreated(data)
             setStep('done')
         } catch {
@@ -741,7 +739,6 @@ function AddChannelDialog({
         setWaLoading(true)
         try {
             const { data } = await api.post('/channels', {
-                orgId,
                 name: waName.trim(),
                 type: 'whatsapp',
                 evolutionUrl: waUrl.trim(),
@@ -1028,10 +1025,10 @@ export default function ChannelsPage() {
         router.push('/test')
     }
 
-    async function loadChannels(id: string) {
+    async function loadChannels() {
         setLoading(true)
         try {
-            const { data } = await api.get('/channels', { params: { orgId: id } })
+            const { data } = await api.get('/channels')
             setChannels(data)
         } catch {
             toast.error('Erro ao carregar canais.')
@@ -1040,10 +1037,10 @@ export default function ChannelsPage() {
         }
     }
 
-    useEffect(() => { if (orgId) loadChannels(orgId) }, [orgId])
+    useEffect(() => { if (orgId) loadChannels() }, [orgId])
 
     function handleCreated(ch: Channel) {
-        if (orgId) loadChannels(orgId)
+        if (orgId) loadChannels()
         toast.success('Canal adicionado!')
     }
 
@@ -1151,7 +1148,6 @@ export default function ChannelsPage() {
                     onClose={() => setDialogOpen(false)}
                     onCreated={handleCreated}
                     reconnectChannel={reconnectChannel}
-                    orgId={orgId}
                 />
             )}
 
@@ -1160,7 +1156,7 @@ export default function ChannelsPage() {
                     channel={widgetChannel}
                     open={!!widgetChannel}
                     onClose={() => setWidgetChannel(null)}
-                    onSaved={() => { if (orgId) loadChannels(orgId) }}
+                    onSaved={() => { if (orgId) loadChannels() }}
                 />
             )}
 

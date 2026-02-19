@@ -1222,7 +1222,7 @@ function TagsTab({ org }: { org: Org }) {
 
     const load = useCallback(() => {
         setLoading(true)
-        api.get('/tags', { params: { orgId: org.id } })
+        api.get('/tags')
             .then(({ data }) => setTags(data))
             .catch(() => setTags([]))
             .finally(() => setLoading(false))
@@ -1231,7 +1231,7 @@ function TagsTab({ org }: { org: Org }) {
     useEffect(() => { load() }, [load])
 
     useEffect(() => {
-        api.get('/channels', { params: { orgId: org.id } })
+        api.get('/channels')
             .then(({ data }) => {
                 const connected = (data as WaChannel[]).filter(
                     (c: WaChannel & { type: string }) => c.type === 'whatsapp' && c.status === 'connected'
@@ -1289,7 +1289,7 @@ function TagsTab({ org }: { org: Org }) {
         if (!newName.trim()) return
         setCreating(true)
         try {
-            const { data } = await api.post('/tags', { orgId: org.id, name: newName.trim(), color: newColor })
+            const { data } = await api.post('/tags', { name: newName.trim(), color: newColor })
             setTags((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
             setNewName('')
             toast.success('Tag criada.')
@@ -1679,7 +1679,7 @@ function EmailTemplatesTab({ org }: { org: Org }) {
     useEffect(() => {
         setHasCustom(false)
         setSubject('')
-        api.get(`/email-templates/${selectedType}`, { params: { orgId: org.id } })
+        api.get(`/email-templates/${selectedType}`)
             .then(({ data }) => {
                 if (data) {
                     setSubject(data.subject)
@@ -1699,7 +1699,6 @@ function EmailTemplatesTab({ org }: { org: Org }) {
         editorRef.current.editor.exportHtml(async ({ html, design }: { html: string; design: object }) => {
             try {
                 await api.put(`/email-templates/${selectedType}`, {
-                    orgId: org.id,
                     subject: subject || EMAIL_TEMPLATE_TYPES[selectedType].label,
                     html,
                     design,
@@ -1717,7 +1716,7 @@ function EmailTemplatesTab({ org }: { org: Org }) {
     async function handleDelete() {
         setDeleting(true)
         try {
-            await api.delete(`/email-templates/${selectedType}`, { params: { orgId: org.id } })
+            await api.delete(`/email-templates/${selectedType}`)
             setHasCustom(false)
             setSubject('')
             toast.success('Template removido. Usando padrão do sistema.')

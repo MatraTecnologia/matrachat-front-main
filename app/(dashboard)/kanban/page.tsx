@@ -282,10 +282,8 @@ function KanbanColumn({
 // ─── AddColumnButton ───────────────────────────────────────────────────────────
 
 function AddColumnButton({
-    orgId,
     onCreated,
 }: {
-    orgId: string
     onCreated: (tag: OrgTag) => void
 }) {
     const [open, setOpen] = useState(false)
@@ -306,7 +304,7 @@ function AddColumnButton({
         if (!trimmed || saving) return
         setSaving(true)
         try {
-            const { data } = await api.post('/tags', { orgId, name: trimmed, color })
+            const { data } = await api.post('/tags', { name: trimmed, color })
             onCreated(data)
             setOpen(false)
         } catch {
@@ -407,11 +405,11 @@ export default function KanbanPage() {
     const [overColumn, setOverColumn] = useState<string | null>(null)  // tagId or '__notag__'
     const dragInfo = useRef<{ contactId: string; sourceTagId: string | null } | null>(null)
 
-    const load = useCallback(async (id: string) => {
+    const load = useCallback(async () => {
         setLoading(true)
         try {
             const [tagsRes, contactsRes] = await Promise.all([
-                api.get('/tags', { params: { orgId: id } }),
+                api.get('/tags'),
                 api.get('/contacts', { params: { limit: 500 } }),
             ])
             setTags(tagsRes.data)
@@ -425,7 +423,7 @@ export default function KanbanPage() {
     }, [])
 
     useEffect(() => {
-        if (orgId) load(orgId)
+        if (orgId) load()
     }, [orgId, load])
 
     // ── Drag handlers ──────────────────────────────────────────────────────────
@@ -473,7 +471,7 @@ export default function KanbanPage() {
             }
         } catch {
             // Rollback on error
-            if (orgId) load(orgId)
+            if (orgId) load()
         }
     }
 
@@ -578,7 +576,6 @@ export default function KanbanPage() {
                     {/* Botão nova coluna */}
                     {orgId && (
                         <AddColumnButton
-                            orgId={orgId}
                             onCreated={(tag) => setTags((prev) => [...prev, tag])}
                         />
                     )}

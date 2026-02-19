@@ -138,7 +138,7 @@ export default function TestPage() {
         api.get('/organizations')
             .then(({ data }) => {
                 if (!Array.isArray(data) || !data[0]) return
-                return api.get('/channels', { params: { orgId: data[0].id } })
+                return api.get('/channels')
             })
             .then((res) => {
                 if (!res) return

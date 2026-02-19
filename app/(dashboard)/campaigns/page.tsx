@@ -206,7 +206,6 @@ function CreateDialog({ open, onClose, onCreated, orgId }: {
         setSaving(true)
         try {
             const { data } = await api.post('/campaigns', {
-                orgId,
                 name:          name.trim(),
                 description:   description.trim() || undefined,
                 keywords,
@@ -722,16 +721,16 @@ export default function CampaignsPage() {
     const [createOpen, setCreateOpen] = useState(false)
     const [selected, setSelected] = useState<Campaign | null>(null)
 
-    const loadCampaigns = useCallback(async (id: string) => {
+    const loadCampaigns = useCallback(async () => {
         setLoading(true)
         try {
-            const { data } = await api.get('/campaigns', { params: { orgId: id } })
+            const { data } = await api.get('/campaigns')
             setCampaigns(data)
         } catch { setCampaigns([]) } finally { setLoading(false) }
     }, [])
 
     useEffect(() => {
-        if (orgId) loadCampaigns(orgId)
+        if (orgId) loadCampaigns()
     }, [orgId, loadCampaigns])
 
     function handleCreated(c: Campaign) {

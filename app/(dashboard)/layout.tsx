@@ -287,8 +287,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 setOrgLogoFit(org.logoFit ?? cached.logoFit ?? 'contain')
                 const orgId = org.id
                 return Promise.all([
-                    api.get('/channels', { params: { orgId } }),
-                    api.get('/tags', { params: { orgId } }),
+                    api.get('/channels'),
+                    api.get('/tags'),
                     api.get(`/organizations/${orgId}/my-permissions`),
                 ]).then(([chRes, tagRes, permRes]) => {
                     const all = chRes.data as Channel[]

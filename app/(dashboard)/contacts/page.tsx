@@ -246,7 +246,7 @@ export default function ContactsPage() {
 
     useEffect(() => {
         if (!orgId) return
-        api.get('/channels', { params: { orgId } })
+        api.get('/channels')
             .then(({ data }) => setWaChannels((data as ChannelRef[]).filter((c) => c.type === 'whatsapp' && c.status === 'connected')))
             .catch(() => null)
     }, [orgId])
