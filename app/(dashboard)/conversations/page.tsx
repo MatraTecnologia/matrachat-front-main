@@ -678,7 +678,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         setHasMore(false)
         oldestDateRef.current = null
 
-        api.get('/messages', { params: { contactId: contact.id, orgId, limit: 50 } })
+        api.get('/messages', { params: { contactId: contact.id, limit: 50 } })
             .then(({ data }) => {
                 const msgs = parseMessages(data.messages)
                 setMessages(msgs)
@@ -694,7 +694,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 .then(() => onContactUpdated({ id: contact.id, convStatus: 'open' }))
                 .catch(() => null)
         }
-    }, [contact.id, orgId])
+    }, [contact.id])
 
     async function handleLoadMore() {
         if (!oldestDateRef.current || loadingMore) return
@@ -703,7 +703,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         const prevScrollHeight = scrollEl?.scrollHeight ?? 0
         try {
             const { data } = await api.get('/messages', {
-                params: { contactId: contact.id, orgId, limit: 50, before: oldestDateRef.current },
+                params: { contactId: contact.id, limit: 50, before: oldestDateRef.current },
             })
             const older = parseMessages(data.messages)
             if (older.length > 0) {
@@ -804,7 +804,6 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     }) {
         try {
             await api.post('/messages', {
-                orgId,
                 contactId: contact.id,
                 channelId: params.channelId,
                 direction: params.direction,
