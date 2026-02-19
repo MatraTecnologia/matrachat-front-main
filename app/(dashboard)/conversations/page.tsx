@@ -68,7 +68,7 @@ type LocalMessage = {
     createdAt: Date
 }
 
-type ConvStatus = 'open' | 'resolved' | 'pending'
+type ConvStatus = 'all' | 'open' | 'resolved' | 'pending'
 type ConvTab    = 'mine' | 'unassigned' | 'all'
 
 // ─── Hook: orgId + currentUserId ───────────────────────────────────────────────
@@ -348,7 +348,8 @@ function ConversationList({
         : contacts.filter((c) => {
             if (channelFilter && c.channelId !== channelFilter) return false
             const hasUnread = unreadIds.has(c.id)
-            if (!hasUnread && (c.convStatus ?? 'open') !== status) return false
+            // Se status === 'all', mostra todas as conversas (não filtra por status)
+            if (status !== 'all' && !hasUnread && (c.convStatus ?? 'open') !== status) return false
             if (tab === 'mine'       && c.assignedToId !== userId) return false
             if (tab === 'unassigned' && c.assignedToId != null) return false
             return true
@@ -359,10 +360,11 @@ function ConversationList({
             {/* Tabs status */}
             <div className="border-b px-3 pt-3 pb-0">
                 <Tabs value={status} onValueChange={(v) => onStatusChange(v as ConvStatus)}>
-                    <TabsList className="w-full h-8 rounded-md p-0.5">
-                        <TabsTrigger value="open"     className="flex-1 text-xs h-7">Abertas</TabsTrigger>
-                        <TabsTrigger value="pending"  className="flex-1 text-xs h-7">Pendentes</TabsTrigger>
-                        <TabsTrigger value="resolved" className="flex-1 text-xs h-7">Resolvidas</TabsTrigger>
+                    <TabsList className="w-full h-8 rounded-md p-0.5 grid grid-cols-4">
+                        <TabsTrigger value="all"      className="text-xs h-7">Todos</TabsTrigger>
+                        <TabsTrigger value="open"     className="text-xs h-7">Abertas</TabsTrigger>
+                        <TabsTrigger value="pending"  className="text-xs h-7">Pendentes</TabsTrigger>
+                        <TabsTrigger value="resolved" className="text-xs h-7">Resolvidas</TabsTrigger>
                     </TabsList>
                 </Tabs>
             </div>
@@ -1196,7 +1198,7 @@ function ConversationsPageInner() {
     const contactFilter = searchParams.get('contactId')
 
     const { orgId, userId }           = useOrgAndUser()
-    const [status, setStatus]         = useState<ConvStatus>('open')
+    const [status, setStatus]         = useState<ConvStatus>('all')
     const [tab, setTab]               = useState<ConvTab>('all')
     const [contacts, setContacts]     = useState<Contact[]>([])
     const [loading, setLoading]       = useState(true)
