@@ -73,7 +73,9 @@ function SignInPageInner() {
     // ── Reenviar verificação de e-mail ────────────────────────────────────────
     async function handleResendVerification() {
         if (!unverifiedEmail) return
-        const callbackURL = organization ? `/join-org?orgId=${organization.id}` : '/'
+        const callbackURL = organization
+            ? `${window.location.origin}/join-org?orgId=${organization.id}`
+            : `${window.location.origin}/dashboard`
         setSubmitting(true)
         try {
             await api.post('/auth/send-verification-email', {
@@ -120,10 +122,10 @@ function SignInPageInner() {
         e.preventDefault()
         const email = (e.currentTarget.elements.namedItem('email') as HTMLInputElement).value
 
-        // callbackURL: após verificar o link, vincula à org e redireciona para /
+        // callbackURL deve ser URL absoluta do frontend para o Better Auth redirecionar corretamente
         const callbackURL = organization
-            ? `/join-org?orgId=${organization.id}`
-            : '/'
+            ? `${window.location.origin}/join-org?orgId=${organization.id}`
+            : `${window.location.origin}/dashboard`
 
         setSubmitting(true)
         try {

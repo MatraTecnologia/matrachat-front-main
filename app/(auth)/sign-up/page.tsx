@@ -108,8 +108,8 @@ export default function SignUpPage() {
             // callbackURL: após verificar e-mail, redireciona para /join-org?orgId=XXX
             // para vincular automaticamente o usuário à organização
             const callbackURL = organization
-                ? `/join-org?orgId=${organization.id}`
-                : '/'
+                ? `${window.location.origin}/join-org?orgId=${organization.id}`
+                : `${window.location.origin}/dashboard`
 
             await api.post('/auth/sign-up/email', { name, email: emailValue, password, callbackURL })
             toast.success('Conta criada! Verifique seu e-mail para ativar o acesso.')
