@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
+import type { EditorRef } from 'react-email-editor'
 import {
     Settings, Users, Building2, Loader2, Trash2, ShieldCheck, Tag, Plus, X, Facebook, Eye, EyeOff, Copy, Check, MessageCircle, Download, Upload, Link2, ImageOff,
     UserPlus, Mail, KeyRound, Shield, ShieldAlert, UserCog, MoreHorizontal, CheckCircle2, Clock, Search, ChevronDown,
@@ -1672,7 +1673,7 @@ function EmailTemplatesTab({ org }: { org: Org }) {
     const [saving, setSaving] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [hasCustom, setHasCustom] = useState(false)
-    const editorRef = useRef<{ editor: { exportHtml: (cb: (data: { html: string; design: object }) => void) => void; loadDesign: (d: object) => void } } | null>(null)
+    const editorRef = useRef<EditorRef>(null)
 
     // Carrega template existente quando o tipo muda
     useEffect(() => {
@@ -1684,7 +1685,8 @@ function EmailTemplatesTab({ org }: { org: Org }) {
                     setSubject(data.subject)
                     setHasCustom(true)
                     if (data.design && editorRef.current?.editor) {
-                        editorRef.current.editor.loadDesign(data.design)
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        editorRef.current.editor.loadDesign(data.design as any)
                     }
                 }
             })
@@ -1781,7 +1783,7 @@ function EmailTemplatesTab({ org }: { org: Org }) {
             {/* Editor Unlayer */}
             <div className="rounded-lg border overflow-hidden" style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
                 <EmailEditor
-                    ref={editorRef as React.RefObject<unknown>}
+                    ref={editorRef}
                     minHeight={600}
                     options={{ locale: 'pt-BR', features: { textEditor: { spellChecker: false } } }}
                 />
