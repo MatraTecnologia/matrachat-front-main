@@ -31,7 +31,7 @@ import { toast } from 'sonner'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'organization' | 'members' | 'roles' | 'tags' | 'facebook' | 'appearance' | 'email-templates'
+type Tab = 'profile' | 'organization' | 'members' | 'roles' | 'tags' | 'facebook' | 'appearance' | 'email-templates'
 
 type OrgTag = {
     id: string
@@ -2076,11 +2076,192 @@ function AppearanceTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => 
     )
 }
 
+// ─── Aba: Perfil ───────────────────────────────────────────────────────────────
+
+function ProfileTab() {
+    const [user, setUser] = useState<{ id: string; name: string; email: string; signature?: string | null } | null>(null)
+    const [notifications, setNotifications] = useState<{
+        notifyNewMessage: boolean
+        notifyAssigned: boolean
+        notifyMention: boolean
+        notifyResolved: boolean
+    } | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [signature, setSignature] = useState('')
+    const [savingSignature, setSavingSignature] = useState(false)
+    const [savingNotifications, setSavingNotifications] = useState(false)
+
+    const load = useCallback(() => {
+        setLoading(true)
+        Promise.all([
+            api.get('/users/me'),
+            api.get('/users/me/notifications'),
+        ]).then(([userRes, notifRes]) => {
+            setUser(userRes.data)
+            setSignature(userRes.data.signature || '')
+            setNotifications(notifRes.data)
+        }).catch(() => {
+            toast.error('Erro ao carregar configurações.')
+        }).finally(() => {
+            setLoading(false)
+        })
+    }, [])
+
+    useEffect(() => { load() }, [load])
+
+    async function handleSaveSignature() {
+        setSavingSignature(true)
+        try {
+            await api.patch('/users/me/signature', { signature })
+            toast.success('Assinatura atualizada.')
+        } catch {
+            toast.error('Erro ao salvar assinatura.')
+        } finally {
+            setSavingSignature(false)
+        }
+    }
+
+    async function handleSaveNotifications() {
+        if (!notifications) return
+        setSavingNotifications(true)
+        try {
+            await api.patch('/users/me/notifications', notifications)
+            toast.success('Preferências de notificação atualizadas.')
+        } catch {
+            toast.error('Erro ao salvar preferências.')
+        } finally {
+            setSavingNotifications(false)
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+        )
+    }
+
+    return (
+        <div className="space-y-8 max-w-3xl">
+            {/* Assinatura */}
+            <div className="space-y-4">
+                <div>
+                    <h2 className="text-lg font-semibold">Assinatura Eletrônica</h2>
+                    <p className="text-sm text-muted-foreground">
+                        Configure uma assinatura que será adicionada automaticamente às suas mensagens.
+                        Use variáveis: <code className="text-xs bg-muted px-1 py-0.5 rounded">{'{{name}}'}</code>,{' '}
+                        <code className="text-xs bg-muted px-1 py-0.5 rounded">{'{{email}}'}</code>,{' '}
+                        <code className="text-xs bg-muted px-1 py-0.5 rounded">{'{{phone}}'}</code>
+                    </p>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="signature">Assinatura</Label>
+                    <textarea
+                        id="signature"
+                        value={signature}
+                        onChange={(e) => setSignature(e.target.value)}
+                        placeholder="Ex: Atenciosamente,&#10;{{name}}&#10;{{email}}"
+                        className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    {user?.name && (
+                        <div className="text-xs text-muted-foreground space-y-1 bg-muted/30 p-3 rounded-md border">
+                            <p className="font-medium">Pré-visualização:</p>
+                            <p className="whitespace-pre-wrap">
+                                {signature
+                                    .replace(/\{\{name\}\}/g, user.name)
+                                    .replace(/\{\{email\}\}/g, user.email)
+                                    .replace(/\{\{phone\}\}/g, user.email) // Substituir por phone se disponível
+                                }
+                            </p>
+                        </div>
+                    )}
+                </div>
+                <Button onClick={handleSaveSignature} disabled={savingSignature}>
+                    {savingSignature && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    Salvar Assinatura
+                </Button>
+            </div>
+
+            <Separator />
+
+            {/* Notificações */}
+            <div className="space-y-4">
+                <div>
+                    <h2 className="text-lg font-semibold">Preferências de Notificação</h2>
+                    <p className="text-sm text-muted-foreground">
+                        Configure quando você deseja receber notificações no sistema.
+                    </p>
+                </div>
+                {notifications && (
+                    <div className="space-y-3">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={notifications.notifyNewMessage}
+                                onChange={(e) => setNotifications({ ...notifications, notifyNewMessage: e.target.checked })}
+                                className="mt-1 h-4 w-4 rounded border-input"
+                            />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium">Novas mensagens</p>
+                                <p className="text-xs text-muted-foreground">Receba notificações quando chegarem novas mensagens.</p>
+                            </div>
+                        </label>
+
+                        <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={notifications.notifyAssigned}
+                                onChange={(e) => setNotifications({ ...notifications, notifyAssigned: e.target.checked })}
+                                className="mt-1 h-4 w-4 rounded border-input"
+                            />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium">Atribuição de conversas</p>
+                                <p className="text-xs text-muted-foreground">Notificar quando uma conversa for atribuída a você.</p>
+                            </div>
+                        </label>
+
+                        <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={notifications.notifyMention}
+                                onChange={(e) => setNotifications({ ...notifications, notifyMention: e.target.checked })}
+                                className="mt-1 h-4 w-4 rounded border-input"
+                            />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium">Menções</p>
+                                <p className="text-xs text-muted-foreground">Receba notificações quando for mencionado (@seu-nome) em conversas.</p>
+                            </div>
+                        </label>
+
+                        <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={notifications.notifyResolved}
+                                onChange={(e) => setNotifications({ ...notifications, notifyResolved: e.target.checked })}
+                                className="mt-1 h-4 w-4 rounded border-input"
+                            />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium">Conversas resolvidas</p>
+                                <p className="text-xs text-muted-foreground">Notificar quando conversas atribuídas a você forem marcadas como resolvidas.</p>
+                            </div>
+                        </label>
+                    </div>
+                )}
+                <Button onClick={handleSaveNotifications} disabled={savingNotifications}>
+                    {savingNotifications && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    Salvar Preferências
+                </Button>
+            </div>
+        </div>
+    )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
     const { data: perms } = usePermissions()
-    const [tab, setTab] = useState<Tab>('organization')
+    const [tab, setTab] = useState<Tab>('profile')
     const [org, setOrg] = useState<Org | null>(null)
     const [currentUserId, setCurrentUserId] = useState<string>('')
     const [myRole, setMyRole] = useState<Role>('member')
@@ -2122,6 +2303,12 @@ export default function SettingsPage() {
                 <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Configurações
                 </p>
+                <SidebarItem
+                    icon={UserCog}
+                    label="Perfil"
+                    active={tab === 'profile'}
+                    onClick={() => setTab('profile')}
+                />
                 {canSettings && (
                     <SidebarItem
                         icon={Building2}
@@ -2189,6 +2376,7 @@ export default function SettingsPage() {
                     </div>
                 ) : (
                     <>
+                        {tab === 'profile' && <ProfileTab />}
                         {tab === 'organization' && (canSettings ? <OrgTab org={org} onSaved={(updated) => setOrg((prev) => prev ? { ...prev, ...updated } : updated)} /> : <NoPermission />)}
                         {tab === 'members' && (canMembers ? <MembersTab org={org} currentUserId={currentUserId} /> : <NoPermission />)}
                         {tab === 'roles' && (canMembers ? <RolesTab org={org} myRole={myRole} /> : <NoPermission />)}
