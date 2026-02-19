@@ -57,7 +57,7 @@ export function useAgentSse(orgId: string | null, handlers: Handlers) {
             esRef.current = null
         }
 
-        const url = `${API_BASE}/agent/sse?orgId=${encodeURIComponent(orgId)}`
+        const url = `${API_BASE}/agent/sse`
         const es = new EventSource(url, { withCredentials: true })
         esRef.current = es
 

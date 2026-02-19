@@ -149,7 +149,7 @@ export default function ReportsPage() {
         else setLoading(true)
 
         try {
-            const params = { orgId: oId, period: p }
+            const params = { period: p }
             const [ovRes, agRes, tlRes, chRes] = await Promise.all([
                 api.get('/reports',          { params }),
                 api.get('/reports/agents',   { params }),
