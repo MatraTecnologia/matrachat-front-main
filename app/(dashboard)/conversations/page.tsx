@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import {
     Search, MessageSquare, Send, Paperclip, Smile,
@@ -1102,7 +1102,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ConversationsPage() {
+function ConversationsPageInner() {
     const { data: perms } = usePermissions()
     const canSend = perms?.permissions.canSendMessages !== false
     const ownOnly = perms?.permissions.canViewOwnConversationsOnly === true
@@ -1337,5 +1337,17 @@ export default function ConversationsPage() {
                 }
             </div>
         </div>
+    )
+}
+
+export default function ConversationsPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex flex-1 items-center justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+        }>
+            <ConversationsPageInner />
+        </Suspense>
     )
 }
