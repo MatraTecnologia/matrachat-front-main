@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,6 @@ interface Organization {
 }
 
 function SignInPageInner() {
-    const router = useRouter()
     const searchParams = useSearchParams()
     const redirectTo = searchParams.get('redirect') || '/dashboard'
     const [status, setStatus] = useState<Status>('loading')
@@ -103,7 +102,7 @@ function SignInPageInner() {
             await api.post('/auth/sign-in/email', { email, password })
             await joinOrgAfterLogin()
             toast.success('Login realizado com sucesso!')
-            router.push(redirectTo)
+            window.location.href = redirectTo
         } catch (err) {
             const message = err instanceof Error ? err.message : ''
             // Better Auth retorna erro específico quando o e-mail não foi verificado
@@ -169,7 +168,7 @@ function SignInPageInner() {
             await api.post('/auth/sign-in/email-otp', { email: otpEmail, otp })
             await joinOrgAfterLogin()
             toast.success('Login realizado com sucesso!')
-            router.push(redirectTo)
+            window.location.href = redirectTo
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Código inválido ou expirado.')
         } finally {

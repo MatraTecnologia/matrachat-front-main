@@ -10,12 +10,13 @@ const PUBLIC_PATHS = [
     '/join-org',
 ]
 
-// Better Auth define o cookie de sessão com este nome por padrão
-const SESSION_COOKIE = 'better-auth.session_token'
-
+// Em produção (HTTPS) o Better Auth adiciona o prefixo __Secure- automaticamente.
+// Verificamos os dois nomes para cobrir dev (http) e prod (https).
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
-    const sessionCookie = request.cookies.get(SESSION_COOKIE)
+    const sessionCookie =
+        request.cookies.get('__Secure-better-auth.session_token') ??
+        request.cookies.get('better-auth.session_token')
     const isAuthenticated = !!sessionCookie?.value
 
     const isPublicPath = PUBLIC_PATHS.some(path => pathname.startsWith(path))
