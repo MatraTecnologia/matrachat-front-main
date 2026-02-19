@@ -1,11 +1,12 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ShieldX } from 'lucide-react'
 
-export default function UnauthorizedPage() {
+function UnauthorizedPageInner() {
     const searchParams = useSearchParams()
     const domain = searchParams.get('domain')
 
@@ -60,5 +61,13 @@ export default function UnauthorizedPage() {
                 </CardContent>
             </Card>
         </div>
+    )
+}
+
+export default function UnauthorizedPage() {
+    return (
+        <Suspense>
+            <UnauthorizedPageInner />
+        </Suspense>
     )
 }
