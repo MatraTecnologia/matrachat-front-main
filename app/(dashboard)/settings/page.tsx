@@ -45,6 +45,7 @@ type Org = {
     name: string
     slug?: string
     logo?: string
+    favicon?: string
     domain?: string
     fbAppId?: string | null
     fbAppSecret?: string | null
@@ -167,6 +168,10 @@ function OrgTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => void })
     const [logoFit, setLogoFit]   = useState<'contain' | 'cover' | 'fill'>(org.logoFit ?? 'contain')
     const [imgDims, setImgDims]   = useState<{ w: number; h: number } | null>(null)
     const [imgError, setImgError] = useState(false)
+    const [favicon, setFavicon]   = useState(org.favicon ?? '')
+    const [faviconMode, setFaviconMode] = useState<'upload' | 'url'>(
+        org.favicon?.startsWith('data:') ? 'upload' : 'url'
+    )
     const [saving, setSaving]     = useState(false)
 
     function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -181,6 +186,18 @@ function OrgTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => void })
         reader.readAsDataURL(file)
     }
 
+    function handleFaviconChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        if (!file) return
+        if (file.size > 512 * 1024) {
+            toast.error('Favicon muito grande. Máximo 512 KB.')
+            return
+        }
+        const reader = new FileReader()
+        reader.onload = () => { setFavicon(reader.result as string) }
+        reader.readAsDataURL(file)
+    }
+
     function handleImgLoad(e: React.SyntheticEvent<HTMLImageElement>) {
         const img = e.currentTarget
         setImgDims({ w: img.naturalWidth, h: img.naturalHeight })
@@ -192,6 +209,7 @@ function OrgTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => void })
             const { data } = await api.patch('/organizations/current', {
                 name:    name.trim() || undefined,
                 logo:    logo.trim() || undefined,
+                favicon: favicon.trim() || undefined,
                 logoBg:  logoBg !== 'transparent' ? logoBg : null,
                 logoFit: logoFit !== 'contain' ? logoFit : null,
             })
@@ -201,10 +219,21 @@ function OrgTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => void })
             localStorage.setItem('matrachat.appearance', JSON.stringify({
                 ...prev,
                 logo:    logo.trim() || null,
+                favicon: favicon.trim() || null,
                 logoBg:  logoBg !== 'transparent' ? logoBg : null,
                 logoFit: logoFit !== 'contain' ? logoFit : null,
             }))
             toast.success('Organização atualizada.')
+
+            // Atualizar favicon no documento
+            if (favicon.trim()) {
+                const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement || document.createElement('link')
+                link.rel = 'icon'
+                link.href = favicon.trim()
+                if (!document.querySelector("link[rel~='icon']")) {
+                    document.head.appendChild(link)
+                }
+            }
         } catch (e: unknown) {
             toast.error(e instanceof Error ? e.message : 'Erro ao salvar.')
         } finally {
@@ -379,6 +408,69 @@ function OrgTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => void })
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* Favicon */}
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <Label>Favicon <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                        <div className="flex items-center gap-0.5 rounded-md border p-0.5 text-xs">
+                            <button type="button" onClick={() => setFaviconMode('upload')}
+                                className={cn('flex items-center gap-1 rounded px-2 py-1 transition-colors',
+                                    faviconMode === 'upload' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                                <Upload className="h-3 w-3" />Upload
+                            </button>
+                            <button type="button" onClick={() => setFaviconMode('url')}
+                                className={cn('flex items-center gap-1 rounded px-2 py-1 transition-colors',
+                                    faviconMode === 'url' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                                <Link2 className="h-3 w-3" />URL
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex items-start gap-4">
+                        {/* Preview */}
+                        <div className="shrink-0 space-y-1">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-lg border bg-muted/30 overflow-hidden">
+                                {favicon.trim() ? (
+                                    <img
+                                        src={favicon}
+                                        alt="Favicon preview"
+                                        className="h-8 w-8 object-contain"
+                                    />
+                                ) : (
+                                    <span className="text-xs text-muted-foreground">16×16</span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Input */}
+                        <div className="flex-1 space-y-2">
+                            {faviconMode === 'upload' ? (
+                                <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-border bg-muted/30 px-4 py-3 text-center hover:border-primary/50 hover:bg-muted/60 transition-colors">
+                                    <Upload className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-xs text-muted-foreground">
+                                        Clique para selecionar<br />
+                                        <span className="text-[10px]">ICO, PNG (16×16 ou 32×32) · Máx. 512 KB</span>
+                                    </span>
+                                    <input type="file" accept=".ico,.png,image/x-icon,image/png" className="hidden" onChange={handleFaviconChange} />
+                                </label>
+                            ) : (
+                                <Input
+                                    value={favicon}
+                                    onChange={(e) => setFavicon(e.target.value)}
+                                    placeholder="https://exemplo.com/favicon.ico"
+                                    className="text-xs"
+                                />
+                            )}
+                            {favicon.trim() && (
+                                <button type="button" onClick={() => setFavicon('')}
+                                    className="flex items-center gap-1 text-xs text-destructive hover:underline">
+                                    <ImageOff className="h-3 w-3" />Remover favicon
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Domínio */}
