@@ -767,7 +767,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption }: {
                     // eslint-disable-next-line jsx-a11y/media-has-caption
                     <audio controls src={src} className="w-48" />
                 ) : mediaType === 'image' || mediaType === 'sticker' ? (
-                    <img src={src} alt={caption || mediaType} className="max-w-[200px] rounded-lg" />
+                    <img src={src} alt={caption || mediaType} className="max-w-[200px] rounded-lg dark-mode-image-subtle" />
                 ) : mediaType === 'video' ? (
                     // eslint-disable-next-line jsx-a11y/media-has-caption
                     <video controls src={src} className="max-w-[200px] rounded-lg" />

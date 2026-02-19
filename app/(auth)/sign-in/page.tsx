@@ -225,7 +225,7 @@ function SignInPageInner() {
                                                 <img
                                                     src={organization.logo}
                                                     alt={organization.name}
-                                                    className="h-10 w-auto mb-1"
+                                                    className="h-10 w-auto mb-1 dark-mode-logo-invert"
                                                 />
                                             )}
                                             <h1 className="text-2xl font-bold">Bem-vindo de volta</h1>
@@ -395,7 +395,7 @@ function SignInPageInner() {
                                     <img
                                         src={effectiveSideImage}
                                         alt=""
-                                        className={`absolute inset-0 h-full w-full ${effectiveSideFit === 'contain' ? 'object-contain' : effectiveSideFit === 'fill' ? 'object-fill' : 'object-cover'}`}
+                                        className={`absolute inset-0 h-full w-full dark-mode-image-subtle ${effectiveSideFit === 'contain' ? 'object-contain' : effectiveSideFit === 'fill' ? 'object-fill' : 'object-cover'}`}
                                     />
                                 </div>
                             )}

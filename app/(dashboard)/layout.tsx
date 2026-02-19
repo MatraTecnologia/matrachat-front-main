@@ -33,6 +33,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { PermissionsContext, type OrgPermissions } from '@/contexts/permissions-context'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
 
@@ -330,7 +331,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <img
                                     src={orgLogo}
                                     alt={orgName || 'Logo'}
-                                    className={cn('h-full w-full', {
+                                    className={cn('h-full w-full dark-mode-logo-invert', {
                                         'object-contain p-1': orgLogoFit === 'contain',
                                         'object-cover': orgLogoFit === 'cover',
                                         'object-fill': orgLogoFit === 'fill',
@@ -342,22 +343,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             )}
                         </div>
 
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <button
-                                    onClick={() => setExpanded((v) => !v)}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                                >
-                                    {expanded
-                                        ? <PanelLeftClose className="h-4 w-4" />
-                                        : <PanelLeftOpen className="h-4 w-4" />
-                                    }
-                                </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">
-                                {expanded ? 'Recolher menu' : 'Expandir menu'}
-                            </TooltipContent>
-                        </Tooltip>
+                        <div className={cn('flex items-center', expanded ? 'gap-1' : 'gap-2')}>
+                            <ThemeToggle />
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => setExpanded((v) => !v)}
+                                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                    >
+                                        {expanded
+                                            ? <PanelLeftClose className="h-4 w-4" />
+                                            : <PanelLeftOpen className="h-4 w-4" />
+                                        }
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="right">
+                                    {expanded ? 'Recolher menu' : 'Expandir menu'}
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
                     </div>
 
                     <div className={cn('h-px bg-border mb-2', expanded ? 'mx-1' : 'w-8')} />

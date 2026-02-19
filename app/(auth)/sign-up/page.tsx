@@ -199,7 +199,7 @@ export default function SignUpPage() {
                                     <FieldGroup>
                                         <div className="flex flex-col items-center gap-2 text-center">
                                             {organization?.logo && (
-                                                <img src={organization.logo} alt={organization.name} className="h-10 w-auto mb-1" />
+                                                <img src={organization.logo} alt={organization.name} className="h-10 w-auto mb-1 dark-mode-logo-invert" />
                                             )}
                                             <h1 className="text-2xl font-bold">Crie sua conta</h1>
                                             <p className="text-muted-foreground text-balance">
@@ -235,7 +235,7 @@ export default function SignUpPage() {
                                     <img
                                         src={effectiveSideImage}
                                         alt=""
-                                        className={`absolute inset-0 h-full w-full ${effectiveSideFit === 'contain' ? 'object-contain' : effectiveSideFit === 'fill' ? 'object-fill' : 'object-cover'}`}
+                                        className={`absolute inset-0 h-full w-full dark-mode-image-subtle ${effectiveSideFit === 'contain' ? 'object-contain' : effectiveSideFit === 'fill' ? 'object-fill' : 'object-cover'}`}
                                     />
                                 </div>
                             )}

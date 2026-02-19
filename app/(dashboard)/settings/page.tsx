@@ -295,7 +295,7 @@ function OrgTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => void })
                                     <img
                                         src={logo}
                                         alt="Logo preview"
-                                        className={cn('h-full w-full', {
+                                        className={cn('h-full w-full dark-mode-logo-invert', {
                                             'object-contain p-1.5': logoFit === 'contain',
                                             'object-cover': logoFit === 'cover',
                                             'object-fill': logoFit === 'fill',
@@ -436,7 +436,7 @@ function OrgTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => void })
                                     <img
                                         src={favicon}
                                         alt="Favicon preview"
-                                        className="h-8 w-8 object-contain"
+                                        className="h-8 w-8 object-contain dark-mode-logo-invert"
                                     />
                                 ) : (
                                     <span className="text-xs text-muted-foreground">16×16</span>
@@ -2010,7 +2010,7 @@ function AppearanceTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => 
                         {/* form side */}
                         <div className="flex-1 flex flex-col items-center justify-center gap-1 p-2 bg-white">
                             {org.logo && (
-                                <img src={org.logo} alt="logo" className="h-4 w-auto object-contain mb-0.5" />
+                                <img src={org.logo} alt="logo" className="h-4 w-auto object-contain mb-0.5 dark-mode-logo-invert" />
                             )}
                             <div className="w-12 h-1.5 rounded bg-muted" />
                             <div className="w-16 h-1 rounded bg-muted/60" />
@@ -2024,7 +2024,7 @@ function AppearanceTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => 
                                 <img
                                     src={sideImage}
                                     alt="side"
-                                    className={`absolute inset-0 h-full w-full ${previewFitClass}`}
+                                    className={`absolute inset-0 h-full w-full dark-mode-image-subtle ${previewFitClass}`}
                                     onError={() => setImgError(true)}
                                 />
                             ) : (
@@ -2065,7 +2065,7 @@ function AppearanceTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => 
                                     <img
                                         src={sideImage}
                                         alt="preview"
-                                        className={cn('h-full w-full', {
+                                        className={cn('h-full w-full dark-mode-image-subtle', {
                                             'object-cover':   sideFit === 'cover',
                                             'object-contain': sideFit === 'contain',
                                             'object-fill':    sideFit === 'fill',

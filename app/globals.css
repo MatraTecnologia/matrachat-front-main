@@ -124,3 +124,18 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Filtros de imagem para dark mode */
+@custom-variant dark (&:is(.dark *)) {
+  .dark-mode-image-adjust {
+    filter: brightness(0.85) contrast(1.1);
+  }
+
+  .dark-mode-logo-invert {
+    filter: invert(1) brightness(0.9);
+  }
+
+  .dark-mode-image-subtle {
+    filter: brightness(0.9);
+  }
+}
