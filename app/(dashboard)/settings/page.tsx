@@ -642,7 +642,14 @@ function MemberRow({ member, currentUserId, myRole, orgId, onReload }: {
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium truncate">{member.user.name}</span>
                         {isMe && <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">você</span>}
-                        <RoleBadge role={member.role} />
+                        {member.customRole ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-medium rounded-full px-2 py-0.5 border" style={{ backgroundColor: `${member.customRole.color}15`, borderColor: member.customRole.color, color: member.customRole.color }}>
+                                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: member.customRole.color }} />
+                                {member.customRole.name}
+                            </span>
+                        ) : (
+                            <RoleBadge role={member.role} />
+                        )}
                         {member.user.emailVerified === false && (
                             <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
                                 <Clock className="h-2.5 w-2.5" />Aguardando verificação
