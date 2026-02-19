@@ -37,10 +37,14 @@ export async function middleware(request: NextRequest) {
     // ─── VALIDAÇÃO DE TENANT (multi-tenant) ──────────────────────────────────────
     // Se o usuário está autenticado e não está em rota pública, valida acesso ao tenant
     if (isAuthenticated && !isPublicPath) {
-        const hostname = request.nextUrl.hostname
+        // Pega o hostname correto (prioriza headers de proxy)
+        const hostname =
+            request.headers.get('x-forwarded-host') ||
+            request.headers.get('host') ||
+            request.nextUrl.hostname
 
         // Ignora validação em localhost/desenvolvimento
-        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('localhost:') || hostname.startsWith('127.0.0.1:')) {
             return NextResponse.next()
         }
 
