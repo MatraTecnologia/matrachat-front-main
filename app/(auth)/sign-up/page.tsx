@@ -87,11 +87,14 @@ export default function SignUpPage() {
                     params: { email: emailValue, orgId: organization.id },
                 })
                 if (data.isMember) {
-                    toast.error('Este e-mail já está cadastrado nesta empresa. Faça login.')
+                    toast.error('Este e-mail já é membro desta empresa. Faça login.')
+                    router.push('/sign-in')
                     return
                 }
                 if (data.userExists) {
-                    toast.error('Este e-mail já possui uma conta. Faça login para acessar esta empresa.')
+                    // Conta existe em outra empresa — login já vincula automaticamente a esta org
+                    toast.info('Este e-mail já possui uma conta em outra empresa. Faça login para acessar esta também.')
+                    router.push('/sign-in')
                     return
                 }
             } catch {
@@ -227,13 +230,15 @@ export default function SignUpPage() {
                                 </form>
                             )}
 
-                            <div className="bg-muted relative hidden md:block">
-                                <img
-                                    src={effectiveSideImage || '/placeholder.svg'}
-                                    alt=""
-                                    className={`absolute inset-0 h-full w-full ${effectiveSideFit === 'contain' ? 'object-contain' : effectiveSideFit === 'fill' ? 'object-fill' : 'object-cover'}`}
-                                />
-                            </div>
+                            {effectiveSideImage && (
+                                <div className="bg-muted relative hidden md:block">
+                                    <img
+                                        src={effectiveSideImage}
+                                        alt=""
+                                        className={`absolute inset-0 h-full w-full ${effectiveSideFit === 'contain' ? 'object-contain' : effectiveSideFit === 'fill' ? 'object-fill' : 'object-cover'}`}
+                                    />
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                     <FieldDescription className="px-6 text-center">

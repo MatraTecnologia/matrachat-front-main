@@ -389,13 +389,15 @@ function SignInPageInner() {
                                 </div>
                             )}
 
-                            <div className="bg-muted relative hidden md:block">
-                                <img
-                                    src={effectiveSideImage || '/placeholder.svg'}
-                                    alt=""
-                                    className={`absolute inset-0 h-full w-full ${effectiveSideFit === 'contain' ? 'object-contain' : effectiveSideFit === 'fill' ? 'object-fill' : 'object-cover'}`}
-                                />
-                            </div>
+                            {effectiveSideImage && (
+                                <div className="bg-muted relative hidden md:block">
+                                    <img
+                                        src={effectiveSideImage}
+                                        alt=""
+                                        className={`absolute inset-0 h-full w-full ${effectiveSideFit === 'contain' ? 'object-contain' : effectiveSideFit === 'fill' ? 'object-fill' : 'object-cover'}`}
+                                    />
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                     <FieldDescription className="px-6 text-center">

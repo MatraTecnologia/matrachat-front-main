@@ -34,10 +34,10 @@ export default function AccountPage() {
     const router = useRouter()
     const [user, setUser] = useState<UserProfile | null>(null)
     const [loading, setLoading] = useState(true)
-    const [name, setName]         = useState('')
-    const [image, setImage]       = useState('')
+    const [name, setName] = useState('')
+    const [image, setImage] = useState('')
     const [imageMode, setImageMode] = useState<'upload' | 'url'>('url')
-    const [saving, setSaving]     = useState(false)
+    const [saving, setSaving] = useState(false)
     const [loggingOut, setLoggingOut] = useState(false)
 
     useEffect(() => {
@@ -88,7 +88,7 @@ export default function AccountPage() {
         } catch {
             // ignora erros de logout
         } finally {
-            router.push('/login')
+            router.push('/sign-in')
         }
     }
 
