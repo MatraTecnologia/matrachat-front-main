@@ -62,6 +62,8 @@ type LocalMessage = {
     id: string
     text: string
     type: 'reply' | 'note' | 'inbound'
+    mediaType?: 'image' | 'audio' | 'video' | 'document' | 'sticker'
+    channelId?: string   // canal de origem (para buscar mídia)
     status: 'sending' | 'sent' | 'error'
     createdAt: Date
 }
@@ -511,6 +513,72 @@ function ConversationEmpty() {
     )
 }
 
+// ─── MediaBubble ──────────────────────────────────────────────────────────────
+
+function MediaBubble({ messageId, channelId, mediaType, caption }: {
+    messageId: string
+    channelId: string
+    mediaType: 'image' | 'audio' | 'video' | 'document' | 'sticker'
+    caption?: string
+}) {
+    const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
+    const [src, setSrc] = useState<string | null>(null)
+
+    async function load() {
+        if (state === 'loading' || state === 'loaded') return
+        setState('loading')
+        try {
+            const { data } = await api.get(`/channels/${channelId}/whatsapp/media/${messageId}`)
+            setSrc(`data:${data.mimeType};base64,${data.base64}`)
+            setState('loaded')
+        } catch {
+            setState('error')
+        }
+    }
+
+    const label: Record<typeof mediaType, string> = {
+        image:    'Imagem',
+        audio:    'Áudio',
+        video:    'Vídeo',
+        document: 'Documento',
+        sticker:  'Sticker',
+    }
+
+    return (
+        <div className="flex flex-col gap-1">
+            {state === 'loaded' && src ? (
+                mediaType === 'audio' ? (
+                    // eslint-disable-next-line jsx-a11y/media-has-caption
+                    <audio controls src={src} className="w-48" />
+                ) : mediaType === 'image' || mediaType === 'sticker' ? (
+                    <img src={src} alt={caption || mediaType} className="max-w-[200px] rounded-lg" />
+                ) : mediaType === 'video' ? (
+                    // eslint-disable-next-line jsx-a11y/media-has-caption
+                    <video controls src={src} className="max-w-[200px] rounded-lg" />
+                ) : (
+                    <a href={src} download className="underline text-xs">{caption || label[mediaType]}</a>
+                )
+            ) : (
+                <button
+                    onClick={load}
+                    disabled={state === 'loading'}
+                    className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-80 hover:opacity-100 disabled:opacity-50"
+                >
+                    {state === 'loading' ? (
+                        <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                    ) : (
+                        <span>⬇</span>
+                    )}
+                    {state === 'error' ? 'Erro — tentar novamente' : `Carregar ${label[mediaType]}`}
+                </button>
+            )}
+            {caption && state === 'loaded' && mediaType !== 'document' && (
+                <p className="text-xs opacity-80 whitespace-pre-wrap break-words">{caption}</p>
+            )}
+        </div>
+    )
+}
+
 // ─── ConversationDetail ───────────────────────────────────────────────────────
 
 function ConversationDetail({ contact, waChannels, orgId, members, onContactUpdated, incomingMessage, canSend }: {
@@ -519,7 +587,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     orgId: string
     members: MemberRef[]
     onContactUpdated: (updated: Partial<Contact> & { id: string }) => void
-    incomingMessage?: { id: string; content: string; createdAt: string } | null
+    incomingMessage?: { id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null
     canSend?: boolean
 }) {
     const [contactModalOpen, setContactModalOpen] = useState(false)
@@ -550,11 +618,14 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             .catch(() => null)
     }, [orgId])
 
-    function parseMessages(raw: Array<{ id: string; content: string; type: string; direction: string; status: string; createdAt: string }>): LocalMessage[] {
+    function parseMessages(raw: Array<{ id: string; content: string; type: string; direction: string; status: string; createdAt: string; channelId?: string | null }>): LocalMessage[] {
+        const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'] as const
         return raw.map((m) => ({
             id: m.id,
             text: m.content,
             type: m.direction === 'inbound' ? 'inbound' : m.type === 'note' ? 'note' : 'reply',
+            mediaType: MEDIA_TYPES.includes(m.type as typeof MEDIA_TYPES[number]) ? m.type as LocalMessage['mediaType'] : undefined,
+            channelId: m.channelId ?? undefined,
             status: m.status as LocalMessage['status'],
             createdAt: new Date(m.createdAt),
         }))
@@ -624,10 +695,14 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         if (!incomingMessage) return
         setMessages((prev) => {
             if (prev.find((m) => m.id === incomingMessage.id)) return prev
+            const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'] as const
+            const inMT = incomingMessage.type as string
             return [...prev, {
                 id: incomingMessage.id,
                 text: incomingMessage.content,
                 type: 'inbound' as const,
+                mediaType: MEDIA_TYPES.includes(inMT as typeof MEDIA_TYPES[number]) ? inMT as LocalMessage['mediaType'] : undefined,
+                channelId: incomingMessage.channelId ?? undefined,
                 status: 'sent' as const,
                 createdAt: new Date(incomingMessage.createdAt),
             }]
@@ -970,7 +1045,15 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                 {msg.type === 'note' && (
                                     <p className="text-[10px] font-semibold text-amber-600 mb-0.5">Nota interna</p>
                                 )}
-                                <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                                {msg.mediaType && (
+                                    <MediaBubble
+                                        messageId={msg.id}
+                                        channelId={msg.channelId ?? selectedChannel?.id ?? ''}
+                                        mediaType={msg.mediaType}
+                                        caption={msg.text}
+                                    />
+                                )}
+                                {!msg.mediaType && <p className="whitespace-pre-wrap break-words">{msg.text}</p>}
                                 <div className="flex items-center justify-end gap-1 mt-1">
                                     <span className={cn('text-[10px]',
                                         msg.type === 'note' ? 'text-amber-500' :
@@ -1123,7 +1206,7 @@ function ConversationsPageInner() {
     const [members, setMembers]       = useState<MemberRef[]>([])
     const [tags, setTags]             = useState<OrgTagRef[]>([])
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
-    const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; createdAt: string } | null>(null)
+    const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null>(null)
 
     const loadContacts = useCallback(async (id: string, tId?: string | null) => {
         setLoading(true)
@@ -1194,7 +1277,7 @@ function ConversationsPageInner() {
         const { contactId, message } = ev
         if (selectedRef.current?.id === contactId) {
             // Push message into the detail panel
-            setIncoming({ id: message.id, content: message.content, createdAt: message.createdAt })
+            setIncoming({ id: message.id, content: message.content, type: message.type, channelId: message.channelId, createdAt: message.createdAt })
         } else {
             // Mark as unread
             setUnreadIds((prev) => {

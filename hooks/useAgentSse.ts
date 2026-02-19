@@ -16,6 +16,7 @@ export type SseNewMessage = {
         type: string
         content: string
         status: string
+        channelId?: string | null
         createdAt: string
     }
     contact?: {
