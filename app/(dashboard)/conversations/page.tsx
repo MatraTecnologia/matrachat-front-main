@@ -313,7 +313,7 @@ type OrgTagRef = { id: string; name: string; color: string }
 
 function ConversationList({
     contacts, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
-    channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated,
+    channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole,
 }: {
     contacts: Contact[]
     loading: boolean
@@ -331,6 +331,7 @@ function ConversationList({
     onTagFilterChange: (tagId: string | null) => void
     orgId: string | null
     onContactUpdated: (updated: Partial<Contact> & { id: string }) => void
+    userRole: string | null
 }) {
     const [search, setSearch] = useState('')
     const [modalContact, setModalContact] = useState<Contact | null>(null)
@@ -407,16 +408,23 @@ function ConversationList({
 
             {/* Sub-tabs + tag filter */}
             <div className="flex items-center gap-1 border-b px-3 py-1.5">
-                {(['mine', 'unassigned', 'all'] as ConvTab[]).map((t) => (
-                    <button key={t} onClick={() => onTabChange(t)}
-                        className={cn(
-                            'rounded px-2.5 py-1 text-xs font-medium transition-colors',
-                            tab === t ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
-                        )}
-                    >
-                        {t === 'mine' ? 'Minhas' : t === 'unassigned' ? 'Não atrib.' : 'Todos'}
-                    </button>
-                ))}
+                {/* Apenas admin e owner podem ver a tab "Todos" */}
+                {(['mine', 'unassigned', 'all'] as ConvTab[])
+                    .filter((t) => {
+                        // Remove a tab "all" para membros que não são admin/owner
+                        if (t === 'all' && userRole !== 'admin' && userRole !== 'owner') return false
+                        return true
+                    })
+                    .map((t) => (
+                        <button key={t} onClick={() => onTabChange(t)}
+                            className={cn(
+                                'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                                tab === t ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+                            )}
+                        >
+                            {t === 'mine' ? 'Minhas' : t === 'unassigned' ? 'Não atrib.' : 'Todos'}
+                        </button>
+                    ))}
                 <div className="ml-auto flex items-center gap-1">
                     {/* Tag filter dropdown */}
                     {tags.length > 0 && (
@@ -1234,7 +1242,10 @@ function ConversationsPageInner() {
 
     const { orgId, userId }           = useOrgAndUser()
     const [status, setStatus]         = useState<ConvStatus>('all')
-    const [tab, setTab]               = useState<ConvTab>('all')
+    // Membros normais começam na tab "Minhas", admin/owner começam em "Todos"
+    const [tab, setTab]               = useState<ConvTab>(
+        perms?.role === 'admin' || perms?.role === 'owner' ? 'all' : 'mine'
+    )
     const [contacts, setContacts]     = useState<Contact[]>([])
     const [loading, setLoading]       = useState(true)
     const [selected, setSelected]     = useState<Contact | null>(null)
@@ -1437,6 +1448,7 @@ function ConversationsPageInner() {
                 onTagFilterChange={handleTagFilterChange}
                 orgId={orgId}
                 onContactUpdated={handleContactUpdated}
+                userRole={perms?.role ?? null}
             />
             <div className="flex flex-1 overflow-hidden">
                 {selected && orgId
