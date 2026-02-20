@@ -8,7 +8,7 @@ import {
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
     CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
-    ZoomIn, ZoomOut, RotateCcw,
+    ZoomIn, ZoomOut, RotateCcw, WifiOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,7 +27,7 @@ import {
     ContextMenuSubTrigger, ContextMenuSubContent,
 } from '@/components/ui/context-menu'
 import {
-    Dialog, DialogContent, DialogHeader, DialogTitle,
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { api } from '@/lib/api'
@@ -1746,6 +1746,11 @@ function ConversationsPageInner() {
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
     const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null>(null)
     const [notifyNewMessage, setNotifyNewMessage] = useState(true)
+    const [reconnectModal, setReconnectModal] = useState<{ open: boolean; contact: Contact | null; channel: ChannelRef | null }>({
+        open: false,
+        contact: null,
+        channel: null,
+    })
 
     const loadContacts = useCallback(async (tId?: string | null) => {
         setLoading(true)
@@ -1764,7 +1769,8 @@ function ConversationsPageInner() {
     const loadChannels = useCallback(async () => {
         try {
             const { data } = await api.get('/channels')
-            setWaChannels((data as ChannelRef[]).filter((c) => c.type === 'whatsapp' && c.status === 'connected'))
+            // Carrega TODOS os canais WhatsApp (conectados e desconectados)
+            setWaChannels((data as ChannelRef[]).filter((c) => c.type === 'whatsapp'))
         } catch { setWaChannels([]) }
     }, [])
 
@@ -1912,6 +1918,19 @@ function ConversationsPageInner() {
     }, [])
 
     function handleSelectContact(c: Contact) {
+        // Verifica se o canal está desconectado
+        const channel = waChannels.find((ch) => ch.id === c.channelId)
+        if (channel && channel.status === 'disconnected') {
+            // Abre modal de confirmação
+            setReconnectModal({
+                open: true,
+                contact: c,
+                channel: channel,
+            })
+            return
+        }
+
+        // Canal conectado ou não encontrado - prossegue normalmente
         setSelected(c)
         setIncoming(null)
         setUnreadIds((prev) => {
@@ -1932,48 +1951,134 @@ function ConversationsPageInner() {
         router.replace(`/conversations?${params.toString()}`)
     }
 
+    async function handleReconnect() {
+        if (!reconnectModal.channel) return
+
+        try {
+            // Chama a API para reconectar o canal
+            await api.post(`/channels/${reconnectModal.channel.id}/whatsapp/connect`)
+            toast.success('Reconectando canal... Por favor, escaneie o QR code na página de Canais.')
+
+            // Recarrega os canais
+            await loadChannels()
+
+            // Fecha o modal
+            setReconnectModal({ open: false, contact: null, channel: null })
+
+            // Redireciona para a página de canais
+            router.push('/channels')
+        } catch (error) {
+            toast.error('Erro ao reconectar canal. Tente novamente.')
+        }
+    }
+
+    function handleViewAnyway() {
+        if (!reconnectModal.contact) return
+
+        // Fecha o modal e abre a conversa mesmo assim
+        setReconnectModal({ open: false, contact: null, channel: null })
+
+        const c = reconnectModal.contact
+        setSelected(c)
+        setIncoming(null)
+        setUnreadIds((prev) => {
+            const next = new Map(prev)
+            next.delete(c.id)
+            return next
+        })
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('contactId', c.id)
+        router.replace(`/conversations?${params.toString()}`)
+    }
+
     if (perms && !perms.permissions.canViewConversations) return <NoPermission />
 
     return (
-        <div className="flex flex-1 overflow-hidden">
-            <ConversationList
-                contacts={contacts}
-                loading={loading}
-                selected={selected}
-                onSelect={handleSelectContact}
-                status={status}
-                tab={tab}
-                onStatusChange={setStatus}
-                onTabChange={setTab}
-                channelFilter={channelFilter}
-                userId={userId}
-                unreadIds={unreadIds}
-                tags={tags}
-                tagFilter={tagFilter}
-                onTagFilterChange={handleTagFilterChange}
-                orgId={orgId}
-                onContactUpdated={handleContactUpdated}
-                userRole={perms?.role ?? null}
-                members={members}
-            />
+        <>
             <div className="flex flex-1 overflow-hidden">
-                {selected && orgId
-                    ? (
-                        <ConversationDetail
-                            key={selected.id}
-                            contact={selected}
-                            waChannels={waChannels}
-                            orgId={orgId}
-                            members={members}
-                            onContactUpdated={handleContactUpdated}
-                            incomingMessage={incomingMessage}
-                            canSend={canSend}
-                        />
-                    )
-                    : <ConversationEmpty />
-                }
+                <ConversationList
+                    contacts={contacts}
+                    loading={loading}
+                    selected={selected}
+                    onSelect={handleSelectContact}
+                    status={status}
+                    tab={tab}
+                    onStatusChange={setStatus}
+                    onTabChange={setTab}
+                    channelFilter={channelFilter}
+                    userId={userId}
+                    unreadIds={unreadIds}
+                    tags={tags}
+                    tagFilter={tagFilter}
+                    onTagFilterChange={handleTagFilterChange}
+                    orgId={orgId}
+                    onContactUpdated={handleContactUpdated}
+                    userRole={perms?.role ?? null}
+                    members={members}
+                />
+                <div className="flex flex-1 overflow-hidden">
+                    {selected && orgId
+                        ? (
+                            <ConversationDetail
+                                key={selected.id}
+                                contact={selected}
+                                waChannels={waChannels}
+                                orgId={orgId}
+                                members={members}
+                                onContactUpdated={handleContactUpdated}
+                                incomingMessage={incomingMessage}
+                                canSend={canSend}
+                            />
+                        )
+                        : <ConversationEmpty />
+                    }
+                </div>
             </div>
-        </div>
+
+            {/* Modal de reconexão de canal */}
+            <Dialog open={reconnectModal.open} onOpenChange={(v) => !v && setReconnectModal({ open: false, contact: null, channel: null })}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <WifiOff className="h-5 w-5 text-red-600" />
+                            Canal Desconectado
+                        </DialogTitle>
+                        <DialogDescription>
+                            O canal <strong>{reconnectModal.channel?.name}</strong> está desconectado do Evolution API.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4 space-y-3">
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                            <p className="text-sm text-amber-800">
+                                ⚠️ <strong>Atenção:</strong> Nenhuma mensagem está sendo recebida ou pode ser enviada neste canal.
+                            </p>
+                        </div>
+
+                        <p className="text-sm text-muted-foreground">
+                            Você pode reconectar o canal agora para voltar a receber e enviar mensagens, ou apenas visualizar o histórico.
+                        </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={handleViewAnyway}
+                        >
+                            Apenas Visualizar
+                        </Button>
+                        <Button
+                            className="flex-1"
+                            onClick={handleReconnect}
+                        >
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            Reconectar Canal
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </>
     )
 }
 
