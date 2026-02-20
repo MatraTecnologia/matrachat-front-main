@@ -1763,6 +1763,156 @@ const EMAIL_TEMPLATE_TYPES: Record<string, { label: string; vars: string[] }> = 
     'otp-forget-password': { label: 'Código OTP (senha)',       vars: ['{{otp}}'] },
 }
 
+// Templates prontos pré-definidos
+const PRESET_TEMPLATES: Record<string, { name: string; description: string; design: object }> = {
+    'blank': {
+        name: 'Em branco',
+        description: 'Comece do zero',
+        design: {},
+    },
+    'simple-logo': {
+        name: 'Simples com logo',
+        description: 'Template minimalista com logo no topo',
+        design: {
+            body: {
+                rows: [
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'image',
+                                values: {
+                                    src: { url: 'https://via.placeholder.com/150x60?text=Logo' },
+                                    textAlign: 'center',
+                                    containerPadding: '20px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<h2>Título do E-mail</h2><p>Seu conteúdo aqui.</p>',
+                                    containerPadding: '20px',
+                                }
+                            }]
+                        }]
+                    },
+                ]
+            }
+        },
+    },
+    'simple-no-logo': {
+        name: 'Simples sem logo',
+        description: 'Template minimalista sem logo',
+        design: {
+            body: {
+                rows: [
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<h2>Título do E-mail</h2><p>Seu conteúdo aqui.</p>',
+                                    containerPadding: '20px',
+                                }
+                            }]
+                        }]
+                    },
+                ]
+            }
+        },
+    },
+    'professional-logo': {
+        name: 'Profissional com logo',
+        description: 'Design profissional com cabeçalho e rodapé',
+        design: {
+            body: {
+                rows: [
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'image',
+                                values: {
+                                    src: { url: 'https://via.placeholder.com/200x80?text=Logo' },
+                                    textAlign: 'center',
+                                    containerPadding: '30px',
+                                }
+                            }]
+                        }],
+                        values: { backgroundColor: '#f8f9fa' }
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<h1>Bem-vindo!</h1><p>Este é um template profissional.</p>',
+                                    containerPadding: '40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<p style="text-align: center; color: #6c757d; font-size: 12px;">© 2024 Sua Empresa. Todos os direitos reservados.</p>',
+                                    containerPadding: '20px',
+                                }
+                            }]
+                        }],
+                        values: { backgroundColor: '#f8f9fa' }
+                    },
+                ]
+            }
+        },
+    },
+    'professional-no-logo': {
+        name: 'Profissional sem logo',
+        description: 'Design profissional apenas com texto',
+        design: {
+            body: {
+                rows: [
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<h1>Bem-vindo!</h1><p>Este é um template profissional.</p>',
+                                    containerPadding: '40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<p style="text-align: center; color: #6c757d; font-size: 12px;">© 2024 Sua Empresa. Todos os direitos reservados.</p>',
+                                    containerPadding: '20px',
+                                }
+                            }]
+                        }],
+                        values: { backgroundColor: '#f8f9fa' }
+                    },
+                ]
+            }
+        },
+    },
+}
+
 // Editor Unlayer carregado apenas no cliente (não tem suporte a SSR)
 const EmailEditor = dynamic(() => import('react-email-editor'), { ssr: false, loading: () => <div className="flex-1 flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> })
 
@@ -1772,12 +1922,15 @@ function EmailTemplatesTab({ org }: { org: Org }) {
     const [saving, setSaving] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [hasCustom, setHasCustom] = useState(false)
+    const [showTemplateSelector, setShowTemplateSelector] = useState(false)
+    const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
     const editorRef = useRef<EditorRef>(null)
 
     // Carrega template existente quando o tipo muda
     useEffect(() => {
         setHasCustom(false)
         setSubject('')
+        setShowTemplateSelector(false)
         api.get(`/email-templates/${selectedType}`)
             .then(({ data }) => {
                 if (data) {
@@ -1787,10 +1940,34 @@ function EmailTemplatesTab({ org }: { org: Org }) {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         editorRef.current.editor.loadDesign(data.design as any)
                     }
+                } else {
+                    // Sem template customizado, mostra seletor
+                    setShowTemplateSelector(true)
                 }
             })
-            .catch(() => null)
+            .catch(() => {
+                setShowTemplateSelector(true)
+            })
     }, [selectedType, org.id])
+
+    function handlePresetSelect(presetKey: string) {
+        const preset = PRESET_TEMPLATES[presetKey]
+        if (preset && editorRef.current?.editor) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            editorRef.current.editor.loadDesign(preset.design as any)
+            setShowTemplateSelector(false)
+            setSelectedPreset(presetKey)
+        }
+    }
+
+    function handleStartFromScratch() {
+        if (editorRef.current?.editor) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            editorRef.current.editor.loadDesign({} as any)
+            setShowTemplateSelector(false)
+            setSelectedPreset('blank')
+        }
+    }
 
     async function handleSave() {
         if (!editorRef.current?.editor) return
@@ -1878,31 +2055,99 @@ function EmailTemplatesTab({ org }: { org: Org }) {
                 ))}
             </div>
 
+            {/* Seletor de Templates (quando não há template customizado) */}
+            {showTemplateSelector && (
+                <div className="space-y-4">
+                    <div className="text-center py-4">
+                        <h3 className="text-lg font-semibold mb-2">Escolha um template inicial</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Selecione um template pronto ou comece do zero
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {/* Em branco */}
+                        <button
+                            onClick={handleStartFromScratch}
+                            className="border rounded-lg p-6 hover:border-primary hover:bg-accent/50 transition-colors text-left group"
+                        >
+                            <div className="flex items-center justify-center h-32 bg-muted rounded mb-3 group-hover:bg-muted/80">
+                                <Plus className="h-12 w-12 text-muted-foreground" />
+                            </div>
+                            <h4 className="font-semibold mb-1">Em branco</h4>
+                            <p className="text-xs text-muted-foreground">Comece do zero com um editor vazio</p>
+                        </button>
+
+                        {/* Templates prontos */}
+                        {Object.entries(PRESET_TEMPLATES)
+                            .filter(([key]) => key !== 'blank')
+                            .map(([key, preset]) => (
+                                <button
+                                    key={key}
+                                    onClick={() => handlePresetSelect(key)}
+                                    className="border rounded-lg p-6 hover:border-primary hover:bg-accent/50 transition-colors text-left group"
+                                >
+                                    <div className="flex items-center justify-center h-32 bg-muted rounded mb-3 group-hover:bg-muted/80">
+                                        <div className="text-xs text-center text-muted-foreground">
+                                            {key.includes('logo') ? '🖼️ Logo' : '📄 Texto'}
+                                        </div>
+                                    </div>
+                                    <h4 className="font-semibold mb-1">{preset.name}</h4>
+                                    <p className="text-xs text-muted-foreground">{preset.description}</p>
+                                </button>
+                            ))}
+                    </div>
+
+                    <div className="text-center pt-2">
+                        <p className="text-xs text-muted-foreground">
+                            Você poderá personalizar completamente o template escolhido
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Editor Unlayer */}
-            <div className="rounded-lg border overflow-hidden" style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
-                <EmailEditor
-                    ref={editorRef}
-                    minHeight={600}
-                    options={{ locale: 'pt-BR', features: { textEditor: { spellChecker: false } } }}
-                />
-            </div>
+            {!showTemplateSelector && (
+                <>
+                    <div className="rounded-lg border overflow-hidden" style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
+                        <EmailEditor
+                            ref={editorRef}
+                            minHeight={600}
+                            options={{ locale: 'pt-BR', features: { textEditor: { spellChecker: false } } }}
+                        />
+                    </div>
+
+                    {/* Botão para trocar template */}
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowTemplateSelector(true)}
+                        >
+                            Escolher outro template
+                        </Button>
+                    </div>
+                </>
+            )}
 
             {/* Ações */}
-            <div className="flex items-center gap-3">
-                <Button onClick={handleSave} disabled={saving}>
-                    {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    Salvar template
-                </Button>
-                {hasCustom && (
-                    <Button variant="outline" onClick={handleDelete} disabled={deleting}>
-                        {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                        Restaurar padrão
+            {!showTemplateSelector && (
+                <div className="flex items-center gap-3">
+                    <Button onClick={handleSave} disabled={saving}>
+                        {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                        Salvar template
                     </Button>
-                )}
-                <span className="text-xs text-muted-foreground ml-auto">
-                    {hasCustom ? '✅ Template personalizado ativo' : 'Usando template padrão do sistema'}
-                </span>
-            </div>
+                    {hasCustom && (
+                        <Button variant="outline" onClick={handleDelete} disabled={deleting}>
+                            {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                            Restaurar padrão
+                        </Button>
+                    )}
+                    <span className="text-xs text-muted-foreground ml-auto">
+                        {hasCustom ? '✅ Template personalizado ativo' : 'Usando template padrão do sistema'}
+                    </span>
+                </div>
+            )}
         </div>
     )
 }
