@@ -1745,6 +1745,7 @@ function ConversationsPageInner() {
     const [tags, setTags]             = useState<OrgTagRef[]>([])
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
     const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null>(null)
+    const [notifyNewMessage, setNotifyNewMessage] = useState(true)
 
     const loadContacts = useCallback(async (tId?: string | null) => {
         setLoading(true)
@@ -1787,14 +1788,25 @@ function ConversationsPageInner() {
         } catch { setTags([]) }
     }, [])
 
+    const loadNotificationSettings = useCallback(async () => {
+        try {
+            const { data } = await api.get('/agent/members')
+            if (data && data.length > 0) {
+                const member = data[0]
+                setNotifyNewMessage(member.notifyNewMessage ?? true)
+            }
+        } catch { /* silencioso */ }
+    }, [])
+
     useEffect(() => {
         if (orgId) {
             loadContacts(tagFilter)
             loadChannels()
             loadMembers()
             loadTags()
+            loadNotificationSettings()
         }
-    }, [orgId, tagFilter, loadContacts, loadChannels, loadMembers, loadTags])
+    }, [orgId, tagFilter, loadContacts, loadChannels, loadMembers, loadTags, loadNotificationSettings])
 
     // Auto-seleciona contato pelo contactId da URL
     useEffect(() => {
@@ -1824,11 +1836,7 @@ function ConversationsPageInner() {
                 return next
             })
             // Sonner toast for incoming message (only if notifications enabled)
-            const notificationsEnabled = typeof window !== 'undefined'
-                ? localStorage.getItem('notifications_enabled') !== 'false'
-                : true
-
-            if (notificationsEnabled) {
+            if (notifyNewMessage) {
                 const contactName = ev.contactName ?? ev.contact?.name ?? contactsRef.current.find((c) => c.id === contactId)?.name ?? 'Novo contato'
                 const avatarUrl   = ev.contactAvatarUrl ?? ev.contact?.avatarUrl ?? contactsRef.current.find((c) => c.id === contactId)?.avatarUrl ?? undefined
                 const preview     = message.content.slice(0, 80) + (message.content.length > 80 ? '…' : '')
@@ -1867,7 +1875,7 @@ function ConversationsPageInner() {
             const [item] = updated.splice(idx, 1)
             return [item, ...updated]
         })
-    }, [])
+    }, [notifyNewMessage])
 
     const handleConvUpdated = useCallback((ev: SseConvUpdated) => {
         setContacts((prev) => prev.map((c) => {
