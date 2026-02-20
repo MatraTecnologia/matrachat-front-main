@@ -8,6 +8,7 @@ import {
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
     CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
+    ZoomIn, ZoomOut, RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -741,6 +742,12 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
 }) {
     const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>(mediaUrl ? 'loaded' : 'idle')
     const [src, setSrc] = useState<string | null>(mediaUrl || null)
+    const [expandedImage, setExpandedImage] = useState(false)
+    const [zoom, setZoom] = useState(1)
+    const [position, setPosition] = useState({ x: 0, y: 0 })
+    const [isDragging, setIsDragging] = useState(false)
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+    const imageRef = useRef<HTMLImageElement>(null)
 
     async function load() {
         if (state === 'loading' || state === 'loaded') return
@@ -754,6 +761,56 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
         }
     }
 
+    function handleZoomIn() {
+        setZoom(prev => Math.min(prev + 0.5, 5))
+    }
+
+    function handleZoomOut() {
+        setZoom(prev => Math.max(prev - 0.5, 0.5))
+    }
+
+    function handleResetZoom() {
+        setZoom(1)
+        setPosition({ x: 0, y: 0 })
+    }
+
+    function handleMouseDown(e: React.MouseEvent) {
+        if (zoom > 1) {
+            setIsDragging(true)
+            setDragStart({
+                x: e.clientX - position.x,
+                y: e.clientY - position.y
+            })
+        }
+    }
+
+    function handleMouseMove(e: React.MouseEvent) {
+        if (isDragging && zoom > 1) {
+            setPosition({
+                x: e.clientX - dragStart.x,
+                y: e.clientY - dragStart.y
+            })
+        }
+    }
+
+    function handleMouseUp() {
+        setIsDragging(false)
+    }
+
+    function handleWheel(e: React.WheelEvent) {
+        e.preventDefault()
+        const delta = e.deltaY > 0 ? -0.2 : 0.2
+        setZoom(prev => Math.max(0.5, Math.min(5, prev + delta)))
+    }
+
+    // Reset zoom quando fecha o modal
+    useEffect(() => {
+        if (!expandedImage) {
+            setZoom(1)
+            setPosition({ x: 0, y: 0 })
+        }
+    }, [expandedImage])
+
     const label: Record<typeof mediaType, string> = {
         image:    'Imagem',
         audio:    'Áudio',
@@ -763,37 +820,121 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
     }
 
     return (
-        <div className="flex flex-col gap-1">
-            {state === 'loaded' && src ? (
-                mediaType === 'audio' ? (
-                    // eslint-disable-next-line jsx-a11y/media-has-caption
-                    <audio controls src={src} className="w-48" />
-                ) : mediaType === 'image' || mediaType === 'sticker' ? (
-                    <img src={src} alt={caption || mediaType} className="max-w-[200px] rounded-lg dark-mode-image-subtle" />
-                ) : mediaType === 'video' ? (
-                    // eslint-disable-next-line jsx-a11y/media-has-caption
-                    <video controls src={src} className="max-w-[200px] rounded-lg" />
-                ) : (
-                    <a href={src} download className="underline text-xs">{caption || label[mediaType]}</a>
-                )
-            ) : (
-                <button
-                    onClick={load}
-                    disabled={state === 'loading'}
-                    className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-80 hover:opacity-100 disabled:opacity-50"
-                >
-                    {state === 'loading' ? (
-                        <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+        <>
+            <div className="flex flex-col gap-1">
+                {state === 'loaded' && src ? (
+                    mediaType === 'audio' ? (
+                        // eslint-disable-next-line jsx-a11y/media-has-caption
+                        <audio controls src={src} className="w-48" />
+                    ) : mediaType === 'image' || mediaType === 'sticker' ? (
+                        <button
+                            onClick={() => setExpandedImage(true)}
+                            className="group relative"
+                        >
+                            <img
+                                src={src}
+                                alt={caption || mediaType}
+                                className="max-w-[200px] rounded-lg dark-mode-image-subtle cursor-pointer hover:opacity-90 transition-opacity"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
+                                <div className="bg-white/90 rounded-full p-2">
+                                    <Search className="h-4 w-4 text-gray-700" />
+                                </div>
+                            </div>
+                        </button>
+                    ) : mediaType === 'video' ? (
+                        // eslint-disable-next-line jsx-a11y/media-has-caption
+                        <video controls src={src} className="max-w-[200px] rounded-lg" />
                     ) : (
-                        <span>⬇</span>
+                        <a href={src} download className="underline text-xs">{caption || label[mediaType]}</a>
+                    )
+                ) : (
+                    <button
+                        onClick={load}
+                        disabled={state === 'loading'}
+                        className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-80 hover:opacity-100 disabled:opacity-50"
+                    >
+                        {state === 'loading' ? (
+                            <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                        ) : (
+                            <span>⬇</span>
+                        )}
+                        {state === 'error' ? 'Erro — tentar novamente' : `Carregar ${label[mediaType]}`}
+                    </button>
+                )}
+                {caption && state === 'loaded' && mediaType !== 'document' && (
+                    <p className="text-xs opacity-80 whitespace-pre-wrap break-words">{caption}</p>
+                )}
+            </div>
+
+            {/* Modal de visualização expandida */}
+            <Dialog open={expandedImage} onOpenChange={setExpandedImage}>
+                <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 overflow-hidden">
+                    <div
+                        className="relative flex items-center justify-center bg-black/95 min-h-[400px] overflow-hidden"
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
+                        onWheel={handleWheel}
+                    >
+                        <img
+                            ref={imageRef}
+                            src={src || ''}
+                            alt={caption || mediaType}
+                            className="max-w-full max-h-[85vh] object-contain transition-transform"
+                            style={{
+                                transform: `scale(${zoom}) translate(${position.x / zoom}px, ${position.y / zoom}px)`,
+                                cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
+                            }}
+                            draggable={false}
+                        />
+
+                        {/* Controles de zoom */}
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 rounded-full px-3 py-2">
+                            <button
+                                onClick={handleZoomOut}
+                                className="text-white hover:text-gray-300 transition-colors p-1"
+                                title="Diminuir zoom"
+                            >
+                                <ZoomOut className="h-4 w-4" />
+                            </button>
+                            <span className="text-white text-xs min-w-[3rem] text-center">
+                                {Math.round(zoom * 100)}%
+                            </span>
+                            <button
+                                onClick={handleZoomIn}
+                                className="text-white hover:text-gray-300 transition-colors p-1"
+                                title="Aumentar zoom"
+                            >
+                                <ZoomIn className="h-4 w-4" />
+                            </button>
+                            <div className="w-px h-4 bg-white/30 mx-1" />
+                            <button
+                                onClick={handleResetZoom}
+                                className="text-white hover:text-gray-300 transition-colors p-1"
+                                title="Reset"
+                            >
+                                <RotateCcw className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {/* Botão fechar */}
+                        <button
+                            onClick={() => setExpandedImage(false)}
+                            className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
+                        >
+                            <X className="h-5 w-5 text-white" />
+                        </button>
+                    </div>
+                    {caption && (
+                        <div className="p-4 bg-background">
+                            <p className="text-sm whitespace-pre-wrap break-words">{caption}</p>
+                        </div>
                     )}
-                    {state === 'error' ? 'Erro — tentar novamente' : `Carregar ${label[mediaType]}`}
-                </button>
-            )}
-            {caption && state === 'loaded' && mediaType !== 'document' && (
-                <p className="text-xs opacity-80 whitespace-pre-wrap break-words">{caption}</p>
-            )}
-        </div>
+                </DialogContent>
+            </Dialog>
+        </>
     )
 }
 
@@ -991,6 +1132,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         direction: 'outbound' | 'inbound'
         channelId?: string
         status?: string
+        externalId?: string
     }) {
         try {
             await api.post('/messages', {
@@ -1000,6 +1142,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 type: params.type,
                 content: params.content,
                 status: params.status ?? 'sent',
+                externalId: params.externalId,
             })
         } catch { /* falha silenciosa */ }
     }
@@ -1065,7 +1208,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
 
         try {
             const base64Data = mediaPreview.split(',')[1]
-            await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, {
+            const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, {
                 number: contactNumber,
                 mediaMessage: {
                     mediatype: mediaType,
@@ -1074,13 +1217,18 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                     caption: captionToSend || undefined,
                 }
             })
+
+            // Extrai o externalId (message key) do response da Evolution API
+            const externalId = response.data?.data?.key?.id || null
+
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
             saveMessage({
-                content: selectedFile.name,
+                content: captionToSend || selectedFile.name,
                 type: mediaType,
                 direction: 'outbound',
                 channelId: selectedChannel.id,
-                status: 'sent'
+                status: 'sent',
+                externalId: externalId,
             })
         } catch {
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
@@ -1112,9 +1260,20 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         setSending(true)
 
         try {
-            await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, { number: contactNumber, text })
+            const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, { number: contactNumber, text })
+
+            // Extrai o externalId (message key) do response da Evolution API
+            const externalId = response.data?.data?.key?.id || null
+
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
-            saveMessage({ content: text, type: 'text', direction: 'outbound', channelId: selectedChannel.id, status: 'sent' })
+            saveMessage({
+                content: text,
+                type: 'text',
+                direction: 'outbound',
+                channelId: selectedChannel.id,
+                status: 'sent',
+                externalId: externalId,
+            })
         } catch {
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
         } finally {
