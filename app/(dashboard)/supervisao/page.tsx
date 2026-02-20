@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
     Monitor, Eye, Users, Activity, MessageSquare,
-    Clock, Maximize2, Grid3x3, LayoutGrid
+    Clock, Maximize2, Grid3x3, LayoutGrid,
+    MessageCircle
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
