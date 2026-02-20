@@ -1145,6 +1145,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     useEffect(() => {
         // Envia evento de "viewing" ao entrar na conversa (HTTP + WebSocket)
         api.post('/agent/presence/viewing', { contactId: contact.id }).catch(() => null)
+        console.log('📍 [SUPERVISÃO] Visualizando contato:', contact.id, contact.name)
         setViewing(contact.id) // WebSocket real-time
 
         // Inicia contador de tempo de visualização
@@ -1198,6 +1199,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     // Transmite mensagens visualizadas para supervisão
     useEffect(() => {
         if (messages.length > 0 && contact.id) {
+            console.log('📨 [SUPERVISÃO] Enviando mensagens:', messages.length, 'para contactId:', contact.id)
             updateScreen(contact.id, messages)
         }
     }, [messages, contact.id])
@@ -1205,6 +1207,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     // Transmite texto sendo digitado em tempo real para supervisão
     useEffect(() => {
         if (contact.id && reply) {
+            console.log('⌨️ [SUPERVISÃO] Input atualizado:', reply.substring(0, 20) + '...')
             updateInput(contact.id, reply)
         }
     }, [reply, contact.id])

@@ -5,6 +5,7 @@ import { usePermissions } from '@/contexts/permissions-context'
 import { usePresenceContext, type UserPresence } from '@/contexts/presence-context'
 import { NoPermission } from '@/components/no-permission'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { AgentScreenMirror } from '@/components/AgentScreenMirror'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -253,127 +254,9 @@ export default function SupervisaoPage() {
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-auto p-6">
-                    {selectedAgent.currentContactId && selectedAgent.contact ? (
-                        <div className="max-w-4xl mx-auto space-y-4">
-                            {/* Info do Contato */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-lg flex items-center gap-2">
-                                        <Eye className="h-5 w-5 text-primary" />
-                                        Conversa Atual - Visualização em Tempo Real
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex items-center gap-3 p-4 rounded-lg border bg-muted/30">
-                                        <Avatar className="h-14 w-14">
-                                            {selectedAgent.contact.avatarUrl && <AvatarImage src={selectedAgent.contact.avatarUrl} />}
-                                            <AvatarFallback className="bg-primary/10">
-                                                {selectedAgent.contact.name.substring(0, 2).toUpperCase()}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="flex-1">
-                                            <p className="font-medium text-lg">{selectedAgent.contact.name}</p>
-                                            <p className="text-sm text-muted-foreground">
-                                                {selectedAgent.contact.phone || 'Sem telefone'}
-                                            </p>
-                                        </div>
-                                        <Button onClick={() => {
-                                            window.location.href = `/conversations?contactId=${selectedAgent.currentContactId}`
-                                        }}>
-                                            <MessageSquare className="mr-2 h-4 w-4" />
-                                            Abrir Conversa
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Última Ação */}
-                            {selectedAgent.screenState?.lastAction && (
-                                <Card className="border-primary/20">
-                                    <CardContent className="pt-4">
-                                        <div className="flex items-center gap-2 text-sm">
-                                            <Activity className="h-4 w-4 text-primary" />
-                                            <span className="font-medium">Última ação:</span>
-                                            <span className="text-muted-foreground">{selectedAgent.screenState.lastAction}</span>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {/* Mensagens em Tempo Real */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-base">Mensagens Visualizadas</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                                        {selectedAgent.screenState?.messages && selectedAgent.screenState.messages.length > 0 ? (
-                                            selectedAgent.screenState.messages.map((msg: any, idx: number) => (
-                                                <div
-                                                    key={idx}
-                                                    className={cn(
-                                                        "flex gap-2 p-3 rounded-lg",
-                                                        msg.type === 'inbound'
-                                                            ? "bg-muted/50 mr-12"
-                                                            : "bg-primary/10 ml-12 flex-row-reverse"
-                                                    )}
-                                                >
-                                                    <div className="flex-1">
-                                                        <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>
-                                                        <p className="text-xs text-muted-foreground mt-1">
-                                                            {new Date(msg.createdAt).toLocaleTimeString('pt-BR', {
-                                                                hour: '2-digit',
-                                                                minute: '2-digit'
-                                                            })}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center py-8 text-muted-foreground">
-                                                <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                                <p className="text-sm">Aguardando mensagens...</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Input em Tempo Real */}
-                            {selectedAgent.screenState?.inputText && (
-                                <Card className="border-green-500/30 bg-green-500/5">
-                                    <CardHeader>
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                            <span className="relative flex h-2 w-2">
-                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
-                                                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500"></span>
-                                            </span>
-                                            Digitando agora...
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="p-3 rounded-lg bg-background/50 border">
-                                            <p className="text-sm text-muted-foreground italic">
-                                                "{selectedAgent.screenState.inputText}"
-                                            </p>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="flex h-full items-center justify-center text-muted-foreground">
-                            <div className="text-center">
-                                <Activity className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                <p>Agente navegando no sistema</p>
-                                {selectedAgent.currentRoute && (
-                                    <p className="text-sm mt-1">{selectedAgent.currentRoute}</p>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                {/* Content - Espelho da Tela do Agente em Tempo Real */}
+                <div className="flex-1 overflow-hidden p-6">
+                    <AgentScreenMirror agentUserId={selectedAgent.userId} />
                 </div>
             </div>
         )

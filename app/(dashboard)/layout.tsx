@@ -39,6 +39,7 @@ import { PermissionsContext, type OrgPermissions } from '@/contexts/permissions-
 import { PresenceProvider, usePresenceContext } from '@/contexts/presence-context'
 import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { GlobalEventCapture } from '@/components/GlobalEventCapture'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
 
@@ -688,6 +689,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 userRole={permissions?.role || null}
                 organizationId={orgId}
             >
+                {/* Captura global de eventos para supervisão */}
+                <GlobalEventCapture />
+
                 <div className="flex h-svh overflow-hidden bg-background">
                 {/* ── Sidebar ── */}
                 <SidebarContent

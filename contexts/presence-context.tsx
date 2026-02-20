@@ -27,6 +27,11 @@ export type UserPresence = {
         inputText?: string
         scrollPosition?: number
         lastAction?: string
+        // Novos campos para supervisão completa
+        pageState?: any  // Estado completo da página
+        clicks?: Array<{ x: number; y: number; timestamp: string; element: string }>
+        currentScroll?: { x: number; y: number }
+        formData?: Record<string, any>
     }
 }
 
@@ -42,18 +47,30 @@ export type PresenceEvent =
     | { type: 'input_update'; userId: string; contactId: string; text: string; organizationId: string }
     | { type: 'scroll_update'; userId: string; contactId: string; position: number; organizationId: string }
     | { type: 'action_performed'; userId: string; contactId: string; action: string; organizationId: string }
+    // Novos eventos para supervisão global
+    | { type: 'page_loaded'; userId: string; route: string; state: any; organizationId: string }
+    | { type: 'page_state'; userId: string; route: string; state: any; organizationId: string }
+    | { type: 'user_click'; userId: string; x: number; y: number; element: string; route: string; organizationId: string; timestamp: string }
+    | { type: 'user_scroll'; userId: string; x: number; y: number; route: string; organizationId: string; timestamp: string }
+    | { type: 'user_input'; userId: string; field: string; value: string; route: string; organizationId: string; timestamp: string }
 
 type PresenceContextValue = {
     isConnected: boolean
     onlineUsers: UserPresence[]
+    socket: Socket | null
     setViewing: (contactId: string | null) => void
     setTyping: (contactId: string, isTyping: boolean) => void
     setStatus: (status: 'online' | 'away') => void
-    // Funções de supervisão
+    // Funções de supervisão (antigas)
     updateScreen: (contactId: string, messages: any[]) => void
     updateInput: (contactId: string, text: string) => void
     updateScroll: (contactId: string, position: number) => void
     sendAction: (contactId: string, action: string) => void
+    // Novas funções para supervisão global
+    sendPageState: (route: string, state: any) => void
+    sendUserClick: (data: { x: number; y: number; element: string; className: string; text: string; route: string; timestamp: string }) => void
+    sendUserScroll: (data: { x: number; y: number; route: string; timestamp: string }) => void
+    sendUserInput: (data: { field: string; value: string; type: string; route: string; timestamp: string }) => void
 }
 
 const PresenceContext = createContext<PresenceContextValue | null>(null)
@@ -365,6 +382,75 @@ export function PresenceProvider({
                     } : u
                 ))
                 break
+
+            // Novos eventos de supervisão global
+            case 'page_loaded':
+                console.log(`📄 ${event.userId} carregou página: ${event.route}`)
+                setOnlineUsers(prev => prev.map(u =>
+                    u.userId === event.userId ? {
+                        ...u,
+                        currentRoute: event.route,
+                        screenState: {
+                            ...u.screenState,
+                            pageState: event.state
+                        }
+                    } : u
+                ))
+                break
+
+            case 'page_state':
+                setOnlineUsers(prev => prev.map(u =>
+                    u.userId === event.userId ? {
+                        ...u,
+                        screenState: {
+                            ...u.screenState,
+                            pageState: event.state
+                        }
+                    } : u
+                ))
+                break
+
+            case 'user_click':
+                setOnlineUsers(prev => prev.map(u =>
+                    u.userId === event.userId ? {
+                        ...u,
+                        screenState: {
+                            ...u.screenState,
+                            clicks: [
+                                ...(u.screenState?.clicks || []).slice(-4), // Mantém últimos 4 cliques
+                                { x: event.x, y: event.y, timestamp: event.timestamp, element: event.element }
+                            ]
+                        }
+                    } : u
+                ))
+                break
+
+            case 'user_scroll':
+                setOnlineUsers(prev => prev.map(u =>
+                    u.userId === event.userId ? {
+                        ...u,
+                        screenState: {
+                            ...u.screenState,
+                            currentScroll: { x: event.x, y: event.y }
+                        }
+                    } : u
+                ))
+                break
+
+            case 'user_input':
+                setOnlineUsers(prev => prev.map(u =>
+                    u.userId === event.userId ? {
+                        ...u,
+                        screenState: {
+                            ...u.screenState,
+                            formData: {
+                                ...u.screenState?.formData,
+                                [event.field]: event.value
+                            }
+                        }
+                    } : u
+                ))
+                break
         }
     }
 
@@ -404,9 +490,30 @@ export function PresenceProvider({
         socketRef.current?.emit('action_performed', { contactId, action })
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Novas Funções de Supervisão Global - Para uso com os hooks
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function sendPageState(route: string, state: any) {
+        socketRef.current?.emit('page_state', { route, state })
+    }
+
+    function sendUserClick(data: { x: number; y: number; element: string; className: string; text: string; route: string; timestamp: string }) {
+        socketRef.current?.emit('user_click', data)
+    }
+
+    function sendUserScroll(data: { x: number; y: number; route: string; timestamp: string }) {
+        socketRef.current?.emit('user_scroll', data)
+    }
+
+    function sendUserInput(data: { field: string; value: string; type: string; route: string; timestamp: string }) {
+        socketRef.current?.emit('user_input', data)
+    }
+
     const value: PresenceContextValue = {
         isConnected,
         onlineUsers,
+        socket: socketRef.current,
         setViewing,
         setTyping,
         setStatus,
@@ -414,6 +521,10 @@ export function PresenceProvider({
         updateInput,
         updateScroll,
         sendAction,
+        sendPageState,
+        sendUserClick,
+        sendUserScroll,
+        sendUserInput,
     }
 
     return (
