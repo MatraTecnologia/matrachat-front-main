@@ -31,7 +31,7 @@ import { toast } from 'sonner'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'organization' | 'members' | 'roles' | 'tags' | 'facebook' | 'appearance' | 'email-templates'
+type Tab = 'profile' | 'organization' | 'members' | 'roles' | 'tags' | 'facebook' | 'appearance' | 'email-templates' | 'assignments'
 
 type OrgTag = {
     id: string
@@ -2356,6 +2356,177 @@ function ProfileTab() {
     )
 }
 
+// ─── Assignments Tab ───────────────────────────────────────────────────────────
+
+function AssignmentsTab({ org }: { org: Org }) {
+    const [settings, setSettings] = useState<{
+        autoAssignmentEnabled: boolean
+        autoAssignmentStrategy: string
+    } | null>(null)
+    const [agentsLoad, setAgentsLoad] = useState<Array<{
+        userId: string
+        name: string
+        email: string
+        image: string | null
+        activeConversations: number
+    }>>([])
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+
+    const loadSettings = useCallback(() => {
+        setLoading(true)
+        Promise.all([
+            api.get('/organizations/current/assignment-settings'),
+            api.get('/organizations/current/agents-load'),
+        ]).then(([settingsRes, agentsRes]) => {
+            setSettings(settingsRes.data)
+            setAgentsLoad(agentsRes.data)
+        }).catch(() => {
+            toast.error('Erro ao carregar configurações de atribuição.')
+        }).finally(() => {
+            setLoading(false)
+        })
+    }, [])
+
+    useEffect(() => { loadSettings() }, [loadSettings])
+
+    async function handleSaveSettings() {
+        if (!settings) return
+        setSaving(true)
+        try {
+            await api.patch('/organizations/current/assignment-settings', settings)
+            toast.success('Configurações de atribuição atualizadas.')
+            loadSettings()
+        } catch {
+            toast.error('Erro ao salvar configurações.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+        )
+    }
+
+    if (!settings) return null
+
+    return (
+        <div className="max-w-2xl space-y-6">
+            <div>
+                <h2 className="text-xl font-semibold mb-1">Atribuições Automáticas</h2>
+                <p className="text-sm text-muted-foreground">
+                    Configure como as conversas serão atribuídas automaticamente aos agentes.
+                </p>
+            </div>
+
+            <div className="space-y-4 border rounded-lg p-6">
+                <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                        <Label className="text-base font-medium">Ativar atribuição automática</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Quando ativado, novas conversas serão automaticamente atribuídas aos agentes.
+                        </p>
+                    </div>
+                    <Button
+                        variant={settings.autoAssignmentEnabled ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSettings({ ...settings, autoAssignmentEnabled: !settings.autoAssignmentEnabled })}
+                    >
+                        {settings.autoAssignmentEnabled ? 'Ativado' : 'Desativado'}
+                    </Button>
+                </div>
+
+                {settings.autoAssignmentEnabled && (
+                    <>
+                        <Separator />
+                        <div className="space-y-3">
+                            <Label className="text-base font-medium">Estratégia de atribuição</Label>
+                            <Select
+                                value={settings.autoAssignmentStrategy}
+                                onValueChange={(value) => setSettings({ ...settings, autoAssignmentStrategy: value })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione uma estratégia" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="round-robin">
+                                        <div className="flex flex-col items-start">
+                                            <span className="font-medium">Round-Robin</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                Distribui conversas igualmente entre todos os agentes
+                                            </span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="load-balancing">
+                                        <div className="flex flex-col items-start">
+                                            <span className="font-medium">Balanceamento de Carga</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                Atribui ao agente com menos conversas ativas
+                                            </span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="random">
+                                        <div className="flex flex-col items-start">
+                                            <span className="font-medium">Aleatório</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                Seleciona um agente aleatoriamente
+                                            </span>
+                                        </div>
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </>
+                )}
+
+                <Separator />
+                <div className="flex justify-end">
+                    <Button onClick={handleSaveSettings} disabled={saving}>
+                        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Salvar configurações
+                    </Button>
+                </div>
+            </div>
+
+            {/* Agent Load Statistics */}
+            {settings.autoAssignmentEnabled && agentsLoad.length > 0 && (
+                <div className="space-y-4 border rounded-lg p-6">
+                    <div>
+                        <h3 className="text-base font-semibold mb-1">Carga de Conversas por Agente</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Número de conversas ativas atribuídas a cada agente.
+                        </p>
+                    </div>
+                    <div className="space-y-2">
+                        {agentsLoad.map((agent) => (
+                            <div key={agent.userId} className="flex items-center justify-between p-3 border rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <Avatar className="h-8 w-8">
+                                        <AvatarImage src={agent.image || undefined} />
+                                        <AvatarFallback>{agent.name[0]}</AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                        <p className="text-sm font-medium">{agent.name}</p>
+                                        <p className="text-xs text-muted-foreground">{agent.email}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm font-semibold">{agent.activeConversations}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -2464,6 +2635,14 @@ export default function SettingsPage() {
                         onClick={() => setTab('email-templates')}
                     />
                 )}
+                {canSettings && (
+                    <SidebarItem
+                        icon={UserCheck}
+                        label="Atribuições"
+                        active={tab === 'assignments'}
+                        onClick={() => setTab('assignments')}
+                    />
+                )}
             </aside>
 
             {/* Content */}
@@ -2483,6 +2662,7 @@ export default function SettingsPage() {
                         {tab === 'facebook' && (canSettings ? <FacebookTab org={org} onSaved={(updated) => setOrg((prev) => prev ? { ...prev, ...updated } : updated)} /> : <NoPermission />)}
                         {tab === 'appearance' && (canSettings ? <AppearanceTab org={org} onSaved={(updated) => setOrg((prev) => prev ? { ...prev, ...updated } : updated)} /> : <NoPermission />)}
                         {tab === 'email-templates' && (canSettings ? <EmailTemplatesTab org={org} /> : <NoPermission />)}
+                        {tab === 'assignments' && (canSettings ? <AssignmentsTab org={org} /> : <NoPermission />)}
                     </>
                 )}
             </div>

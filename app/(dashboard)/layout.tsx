@@ -25,6 +25,7 @@ import {
     Sparkles,
     Zap,
     Kanban,
+    ListTodo,
 
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -522,6 +523,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             icon={BookOpen}
                             label="Central de Ajuda"
                             active={pathname.startsWith('/help-center')}
+                            expanded={expanded}
+                        />
+
+                        {/* Changelog / Logs */}
+                        <NavItem
+                            href="/logs"
+                            icon={ListTodo}
+                            label="Changelog"
+                            active={pathname.startsWith('/logs')}
                             expanded={expanded}
                         />
 
