@@ -33,7 +33,7 @@ import { Separator } from '@/components/ui/separator'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/contexts/permissions-context'
 import { NoPermission } from '@/components/no-permission'
-import { useAgentSse, type SseNewMessage, type SseConvUpdated } from '@/hooks/useAgentSse'
+import { useAgentSse, type SseNewMessage, type SseConvUpdated, type SseUserViewing, type SseUserLeft, type SseUserTyping } from '@/hooks/useAgentSse'
 import { toast } from 'sonner'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
@@ -731,6 +731,64 @@ function ConversationEmpty() {
     )
 }
 
+// ─── WhatsAppFormattedText ────────────────────────────────────────────────────
+// Componente que renderiza texto com formatação WhatsApp
+function WhatsAppFormattedText({ text }: { text: string }) {
+    const formatText = (input: string) => {
+        const parts: (string | React.ReactElement)[] = []
+        let currentIndex = 0
+        let key = 0
+
+        // Regex para detectar formatações WhatsApp
+        // *texto* = negrito, _texto_ = itálico, ~texto~ = tachado, ```texto``` = monoespaçado
+        const regex = /(\*[^*\n]+\*)|(_[^_\n]+_)|(~[^~\n]+~)|(```[^`\n]+```)/g
+        let match: RegExpExecArray | null
+
+        while ((match = regex.exec(input)) !== null) {
+            // Adiciona texto antes da formatação
+            if (match.index > currentIndex) {
+                parts.push(input.substring(currentIndex, match.index))
+            }
+
+            const fullMatch = match[0]
+            const content = fullMatch.slice(
+                fullMatch.startsWith('```') ? 3 : 1,
+                fullMatch.endsWith('```') ? -3 : -1
+            )
+
+            // Aplica formatação baseada no delimitador
+            if (fullMatch.startsWith('*') && fullMatch.endsWith('*')) {
+                parts.push(<strong key={key++}>{content}</strong>)
+            } else if (fullMatch.startsWith('_') && fullMatch.endsWith('_')) {
+                parts.push(<em key={key++}>{content}</em>)
+            } else if (fullMatch.startsWith('~') && fullMatch.endsWith('~')) {
+                parts.push(<del key={key++}>{content}</del>)
+            } else if (fullMatch.startsWith('```') && fullMatch.endsWith('```')) {
+                parts.push(
+                    <code key={key++} className="bg-black/10 px-1 py-0.5 rounded text-xs font-mono">
+                        {content}
+                    </code>
+                )
+            }
+
+            currentIndex = match.index + fullMatch.length
+        }
+
+        // Adiciona texto restante
+        if (currentIndex < input.length) {
+            parts.push(input.substring(currentIndex))
+        }
+
+        return parts.length > 0 ? parts : [input]
+    }
+
+    return (
+        <p className="whitespace-pre-wrap break-words">
+            {formatText(text)}
+        </p>
+    )
+}
+
 // ─── MediaBubble ──────────────────────────────────────────────────────────────
 
 function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
@@ -982,6 +1040,53 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [dontAskAgain, setDontAskAgain] = useState(false)
     const messageCountRef = useRef<number>(0)
 
+    // Estados para presença e indicadores em tempo real
+    type ViewingUser = {
+        userId: string
+        userName: string
+        userImage: string | null
+        timestamp: string
+        viewDuration: number
+    }
+    const [viewingUsers, setViewingUsers] = useState<ViewingUser[]>([])
+    const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
+    const viewDurationInterval = useRef<ReturnType<typeof setInterval> | null>(null)
+
+    // Estados para assinatura automática
+    const [userSignature, setUserSignature] = useState<string | null>(null)
+    const [signaturePosition, setSignaturePosition] = useState<'pre' | 'post'>('post')
+    const [userName, setUserName] = useState<string>('')
+    const [userEmail, setUserEmail] = useState<string>('')
+    const [userPhone, setUserPhone] = useState<string>('')
+
+    // Carregar assinatura do usuário
+    useEffect(() => {
+        api.get('/users/me')
+            .then(({ data }) => {
+                setUserSignature(data.signature || null)
+                setSignaturePosition(data.signaturePosition || 'post')
+                setUserName(data.name || '')
+                setUserEmail(data.email || '')
+                setUserPhone(data.phone || '')
+            })
+            .catch(() => null)
+    }, [])
+
+    // Função para aplicar assinatura ao conteúdo
+    function applySignature(content: string): string {
+        if (!userSignature) return content
+
+        const processedSignature = userSignature
+            .replace(/\{\{name\}\}/g, userName)
+            .replace(/\{\{email\}\}/g, userEmail)
+            .replace(/\{\{phone\}\}/g, userPhone || userEmail)
+
+        if (signaturePosition === 'pre') {
+            return `${processedSignature}\n\n${content}`
+        }
+        return `${content}\n\n${processedSignature}`
+    }
+
     useEffect(() => {
         api.get('/tags')
             .then(({ data }) => setAllTags(data))
@@ -1030,6 +1135,54 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 .catch(() => null)
         }
     }, [contact.id])
+
+    // Tracking de presença - envia evento quando entra/sai da conversa
+    useEffect(() => {
+        // Envia evento de "viewing" ao entrar na conversa
+        api.post('/agent/presence/viewing', { contactId: contact.id }).catch(() => null)
+
+        // Inicia contador de tempo de visualização
+        if (viewDurationInterval.current) {
+            clearInterval(viewDurationInterval.current)
+        }
+        viewDurationInterval.current = setInterval(() => {
+            setViewingUsers((prev) =>
+                prev.map((u) => ({ ...u, viewDuration: u.viewDuration + 1 }))
+            )
+        }, 1000)
+
+        // Cleanup: envia evento de "left" ao sair da conversa
+        return () => {
+            api.post('/agent/presence/left', { contactId: contact.id }).catch(() => null)
+            if (viewDurationInterval.current) {
+                clearInterval(viewDurationInterval.current)
+            }
+        }
+    }, [contact.id])
+
+    // Detecta quando usuário está digitando
+    useEffect(() => {
+        let typingTimeout: ReturnType<typeof setTimeout> | null = null
+
+        const handleTyping = () => {
+            // Envia evento de "está digitando"
+            api.post('/agent/presence/typing', { contactId: contact.id, isTyping: true }).catch(() => null)
+
+            // Cancela timeout anterior
+            if (typingTimeout) clearTimeout(typingTimeout)
+
+            // Define novo timeout para parar de "digitar" após 2 segundos
+            typingTimeout = setTimeout(() => {
+                api.post('/agent/presence/typing', { contactId: contact.id, isTyping: false }).catch(() => null)
+            }, 2000)
+        }
+
+        // Cleanup
+        return () => {
+            if (typingTimeout) clearTimeout(typingTimeout)
+            api.post('/agent/presence/typing', { contactId: contact.id, isTyping: false }).catch(() => null)
+        }
+    }, [contact.id, reply])
 
     async function handleLoadMore() {
         if (!oldestDateRef.current || loadingMore) return
@@ -1198,7 +1351,10 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
 
         const tempId = crypto.randomUUID()
         const mediaType = detectMediaType(selectedFile)
-        const captionText = mediaCaption.trim() || selectedFile.name
+        const captionToSend = mediaCaption.trim()
+        // Aplica assinatura ao caption se houver texto
+        const captionWithSignature = captionToSend ? applySignature(captionToSend) : ''
+        const captionText = captionWithSignature || selectedFile.name
         const optimistic: LocalMessage = {
             id: tempId,
             text: captionText,
@@ -1210,7 +1366,6 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         }
 
         setMessages((prev) => [...prev, optimistic])
-        const captionToSend = mediaCaption.trim()
         cancelMediaPreview()
         setSending(true)
 
@@ -1222,7 +1377,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                     mediatype: mediaType,
                     fileName: selectedFile.name,
                     media: base64Data,
-                    caption: captionToSend || undefined,
+                    caption: captionWithSignature || undefined,
                 }
             })
 
@@ -1231,7 +1386,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
 
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
             saveMessage({
-                content: captionToSend || selectedFile.name,
+                content: captionWithSignature || selectedFile.name,
                 type: mediaType,
                 direction: 'outbound',
                 channelId: selectedChannel.id,
@@ -1261,21 +1416,24 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         if (!selectedChannel) { alert('Selecione um canal WhatsApp para enviar a mensagem.'); return }
         if (!contactNumber)   { alert('Número do contato não encontrado.'); return }
 
+        // Aplica assinatura ao texto antes de enviar
+        const textWithSignature = applySignature(text)
+
         const tempId = crypto.randomUUID()
-        const optimistic: LocalMessage = { id: tempId, text, type: 'reply', status: 'sending', createdAt: new Date() }
+        const optimistic: LocalMessage = { id: tempId, text: textWithSignature, type: 'reply', status: 'sending', createdAt: new Date() }
         setMessages((prev) => [...prev, optimistic])
         setReply('')
         setSending(true)
 
         try {
-            const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, { number: contactNumber, text })
+            const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, { number: contactNumber, text: textWithSignature })
 
             // Extrai o externalId (message key) do response da Evolution API
             const externalId = response.data?.data?.key?.id || null
 
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
             saveMessage({
-                content: text,
+                content: textWithSignature,
                 type: 'text',
                 direction: 'outbound',
                 channelId: selectedChannel.id,
@@ -1591,7 +1749,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                         mediaUrl={msg.mediaUrl}
                                     />
                                 )}
-                                {!msg.mediaType && <p className="whitespace-pre-wrap break-words">{msg.text}</p>}
+                                {!msg.mediaType && <WhatsAppFormattedText text={msg.text} />}
                                 <div className="flex items-center justify-end gap-1 mt-1">
                                     <span className={cn('text-[10px]',
                                         msg.type === 'note' ? 'text-amber-500' :

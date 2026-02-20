@@ -39,9 +39,35 @@ export type SseConvUpdated = {
     assignedToName: string | null
 }
 
+export type SseUserViewing = {
+    type: 'user_viewing'
+    contactId: string
+    userId: string
+    userName: string
+    userImage: string | null
+    timestamp: string
+}
+
+export type SseUserLeft = {
+    type: 'user_left'
+    contactId: string
+    userId: string
+}
+
+export type SseUserTyping = {
+    type: 'user_typing'
+    contactId: string
+    userId: string
+    userName: string
+    isTyping: boolean
+}
+
 type Handlers = {
     onNewMessage?: (ev: SseNewMessage) => void
     onConvUpdated?: (ev: SseConvUpdated) => void
+    onUserViewing?: (ev: SseUserViewing) => void
+    onUserLeft?: (ev: SseUserLeft) => void
+    onUserTyping?: (ev: SseUserTyping) => void
 }
 
 export function useAgentSse(orgId: string | null, handlers: Handlers) {
@@ -73,6 +99,27 @@ export function useAgentSse(orgId: string | null, handlers: Handlers) {
             try {
                 const event: SseConvUpdated = JSON.parse(e.data)
                 handlersRef.current.onConvUpdated?.(event)
+            } catch { /* ignore parse errors */ }
+        })
+
+        es.addEventListener('user_viewing', (e: MessageEvent) => {
+            try {
+                const event: SseUserViewing = JSON.parse(e.data)
+                handlersRef.current.onUserViewing?.(event)
+            } catch { /* ignore parse errors */ }
+        })
+
+        es.addEventListener('user_left', (e: MessageEvent) => {
+            try {
+                const event: SseUserLeft = JSON.parse(e.data)
+                handlersRef.current.onUserLeft?.(event)
+            } catch { /* ignore parse errors */ }
+        })
+
+        es.addEventListener('user_typing', (e: MessageEvent) => {
+            try {
+                const event: SseUserTyping = JSON.parse(e.data)
+                handlersRef.current.onUserTyping?.(event)
             } catch { /* ignore parse errors */ }
         })
 
