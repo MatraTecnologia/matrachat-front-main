@@ -1823,17 +1823,23 @@ function ConversationsPageInner() {
                 next.set(contactId, (prev.get(contactId) ?? 0) + 1)
                 return next
             })
-            // Sonner toast for incoming message (not the selected contact)
-            const contactName = ev.contactName ?? ev.contact?.name ?? contactsRef.current.find((c) => c.id === contactId)?.name ?? 'Novo contato'
-            const avatarUrl   = ev.contactAvatarUrl ?? ev.contact?.avatarUrl ?? contactsRef.current.find((c) => c.id === contactId)?.avatarUrl ?? undefined
-            const preview     = message.content.slice(0, 80) + (message.content.length > 80 ? '…' : '')
-            toast(contactName, {
-                description: preview,
-                icon: avatarUrl
-                    ? <img src={avatarUrl} alt={contactName} className="h-8 w-8 rounded-full object-cover" />
-                    : undefined,
-                duration: 5000,
-            })
+            // Sonner toast for incoming message (only if notifications enabled)
+            const notificationsEnabled = typeof window !== 'undefined'
+                ? localStorage.getItem('notifications_enabled') !== 'false'
+                : true
+
+            if (notificationsEnabled) {
+                const contactName = ev.contactName ?? ev.contact?.name ?? contactsRef.current.find((c) => c.id === contactId)?.name ?? 'Novo contato'
+                const avatarUrl   = ev.contactAvatarUrl ?? ev.contact?.avatarUrl ?? contactsRef.current.find((c) => c.id === contactId)?.avatarUrl ?? undefined
+                const preview     = message.content.slice(0, 80) + (message.content.length > 80 ? '…' : '')
+                toast(contactName, {
+                    description: preview,
+                    icon: avatarUrl
+                        ? <img src={avatarUrl} alt={contactName} className="h-8 w-8 rounded-full object-cover" />
+                        : undefined,
+                    duration: 5000,
+                })
+            }
         }
         // Bubble the contact to top of list (or add if new contact)
         setContacts((prev) => {
