@@ -74,10 +74,11 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
         loadMembers()
     }, [orgId])
 
-    // Carrega usuários online
+    // Carrega usuários online inicialmente e conecta ao SSE para atualizações em tempo real
     useEffect(() => {
         if (!orgId) return
 
+        // Carregamento inicial
         const loadOnlineUsers = async () => {
             try {
                 const { data } = await api.get('/agent/presence/online')
@@ -88,9 +89,71 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
         }
 
         loadOnlineUsers()
-        const interval = setInterval(loadOnlineUsers, 5000) // Atualiza a cada 5s
 
-        return () => clearInterval(interval)
+        // Conecta ao SSE para atualizações em tempo real
+        const connectSSE = async () => {
+            try {
+                const token = document.cookie
+                    .split('; ')
+                    .find(row => row.startsWith('better_auth.session_token='))
+                    ?.split('=')[1]
+
+                if (!token) return
+
+                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+                const eventSource = new EventSource(`${baseUrl}/agent/sse`, {
+                    withCredentials: true,
+                })
+
+                eventSource.addEventListener('user_viewing', (event) => {
+                    const data = JSON.parse(event.data)
+                    if (data.userId === currentUserId) return
+
+                    setOnlineUsers(prev => {
+                        const filtered = prev.filter(u => u.userId !== data.userId)
+                        return [...filtered, {
+                            userId: data.userId,
+                            userName: data.userName,
+                            userImage: data.userImage,
+                            currentContactId: data.contactId || null,
+                            lastActivity: new Date().toISOString(),
+                            connectedAt: prev.find(u => u.userId === data.userId)?.connectedAt || new Date().toISOString(),
+                        }]
+                    })
+                })
+
+                eventSource.addEventListener('user_left', (event) => {
+                    const data = JSON.parse(event.data)
+                    setOnlineUsers(prev => prev.map(u =>
+                        u.userId === data.userId
+                            ? { ...u, currentContactId: null }
+                            : u
+                    ))
+                })
+
+                eventSource.onerror = () => {
+                    eventSource.close()
+                    // Fallback para polling em caso de erro no SSE
+                    setTimeout(connectSSE, 5000)
+                }
+
+                return () => {
+                    eventSource.close()
+                }
+            } catch (error) {
+                console.error('Erro ao conectar SSE:', error)
+            }
+        }
+
+        const cleanupSSE = connectSSE()
+
+        // Polling de fallback a cada 30s (menos frequente) para sincronizar estado
+        const fallbackInterval = setInterval(loadOnlineUsers, 30000)
+
+        return () => {
+            clearInterval(fallbackInterval)
+            cleanupSSE?.then(cleanup => cleanup?.())
+        }
     }, [orgId, currentUserId])
 
     // Combina membros com status online
