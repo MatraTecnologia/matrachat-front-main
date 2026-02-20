@@ -91,6 +91,16 @@ type CustomRole = {
     _count?: { members: number }
 }
 
+type EmailPreset = {
+    id: string
+    name: string
+    description?: string | null
+    thumbnail?: string | null
+    design: object
+    createdAt: string
+    updatedAt: string
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function initials(name: string) {
@@ -1924,7 +1934,29 @@ function EmailTemplatesTab({ org }: { org: Org }) {
     const [hasCustom, setHasCustom] = useState(false)
     const [showTemplateSelector, setShowTemplateSelector] = useState(false)
     const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
+    const [customPresets, setCustomPresets] = useState<EmailPreset[]>([])
+    const [loadingPresets, setLoadingPresets] = useState(false)
+    const [showSavePresetDialog, setShowSavePresetDialog] = useState(false)
+    const [presetName, setPresetName] = useState('')
+    const [presetDescription, setPresetDescription] = useState('')
+    const [savingPreset, setSavingPreset] = useState(false)
+    const [editorReady, setEditorReady] = useState(false)
     const editorRef = useRef<EditorRef>(null)
+
+    // Carrega presets customizados do banco
+    useEffect(() => {
+        setLoadingPresets(true)
+        api.get('/email-template-presets')
+            .then(({ data }) => {
+                setCustomPresets(data.presets || [])
+            })
+            .catch(() => {
+                toast.error('Erro ao carregar templates personalizados')
+            })
+            .finally(() => {
+                setLoadingPresets(false)
+            })
+    }, [])
 
     // Carrega template existente quando o tipo muda
     useEffect(() => {
@@ -1952,21 +1984,37 @@ function EmailTemplatesTab({ org }: { org: Org }) {
 
     function handlePresetSelect(presetKey: string) {
         const preset = PRESET_TEMPLATES[presetKey]
-        if (preset && editorRef.current?.editor) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            editorRef.current.editor.loadDesign(preset.design as any)
+        if (preset) {
             setShowTemplateSelector(false)
             setSelectedPreset(presetKey)
+            setEditorReady(false)
+            // Aguarda o editor estar pronto antes de carregar o design
+            const loadDesign = () => {
+                if (editorRef.current?.editor) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    editorRef.current.editor.loadDesign(preset.design as any)
+                } else {
+                    setTimeout(loadDesign, 100)
+                }
+            }
+            setTimeout(loadDesign, 100)
         }
     }
 
     function handleStartFromScratch() {
-        if (editorRef.current?.editor) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            editorRef.current.editor.loadDesign({} as any)
-            setShowTemplateSelector(false)
-            setSelectedPreset('blank')
+        setShowTemplateSelector(false)
+        setSelectedPreset('blank')
+        setEditorReady(false)
+        // Aguarda o editor estar pronto antes de carregar design vazio
+        const loadDesign = () => {
+            if (editorRef.current?.editor) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                editorRef.current.editor.loadDesign({} as any)
+            } else {
+                setTimeout(loadDesign, 100)
+            }
         }
+        setTimeout(loadDesign, 100)
     }
 
     async function handleSave() {
@@ -2001,6 +2049,57 @@ function EmailTemplatesTab({ org }: { org: Org }) {
         } finally {
             setDeleting(false)
         }
+    }
+
+    async function handleSaveAsPreset() {
+        if (!editorRef.current?.editor || !presetName.trim()) return
+
+        setSavingPreset(true)
+        editorRef.current.editor.exportHtml(async ({ design }: { html: string; design: object }) => {
+            try {
+                const response = await api.post('/email-template-presets', {
+                    name: presetName.trim(),
+                    description: presetDescription.trim() || undefined,
+                    design,
+                })
+
+                setCustomPresets(prev => [response.data.preset, ...prev])
+                setShowSavePresetDialog(false)
+                setPresetName('')
+                setPresetDescription('')
+                toast.success('Template salvo como preset!')
+            } catch {
+                toast.error('Erro ao salvar preset.')
+            } finally {
+                setSavingPreset(false)
+            }
+        })
+    }
+
+    async function handleDeletePreset(presetId: string) {
+        try {
+            await api.delete(`/email-template-presets/${presetId}`)
+            setCustomPresets(prev => prev.filter(p => p.id !== presetId))
+            toast.success('Preset removido com sucesso!')
+        } catch {
+            toast.error('Erro ao remover preset.')
+        }
+    }
+
+    function handleLoadPreset(preset: EmailPreset) {
+        setShowTemplateSelector(false)
+        setSelectedPreset(preset.id)
+        setEditorReady(false)
+        // Aguarda o editor estar pronto antes de carregar o design
+        const loadDesign = () => {
+            if (editorRef.current?.editor) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                editorRef.current.editor.loadDesign(preset.design as any)
+            } else {
+                setTimeout(loadDesign, 100)
+            }
+        }
+        setTimeout(loadDesign, 100)
     }
 
     const typeInfo = EMAIL_TEMPLATE_TYPES[selectedType]
@@ -2057,7 +2156,7 @@ function EmailTemplatesTab({ org }: { org: Org }) {
 
             {/* Seletor de Templates (quando não há template customizado) */}
             {showTemplateSelector && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <div className="text-center py-4">
                         <h3 className="text-lg font-semibold mb-2">Escolha um template inicial</h3>
                         <p className="text-sm text-muted-foreground">
@@ -2065,37 +2164,80 @@ function EmailTemplatesTab({ org }: { org: Org }) {
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {/* Em branco */}
-                        <button
-                            onClick={handleStartFromScratch}
-                            className="border rounded-lg p-6 hover:border-primary hover:bg-accent/50 transition-colors text-left group"
-                        >
-                            <div className="flex items-center justify-center h-32 bg-muted rounded mb-3 group-hover:bg-muted/80">
-                                <Plus className="h-12 w-12 text-muted-foreground" />
-                            </div>
-                            <h4 className="font-semibold mb-1">Em branco</h4>
-                            <p className="text-xs text-muted-foreground">Comece do zero com um editor vazio</p>
-                        </button>
-
-                        {/* Templates prontos */}
-                        {Object.entries(PRESET_TEMPLATES)
-                            .filter(([key]) => key !== 'blank')
-                            .map(([key, preset]) => (
-                                <button
-                                    key={key}
-                                    onClick={() => handlePresetSelect(key)}
-                                    className="border rounded-lg p-6 hover:border-primary hover:bg-accent/50 transition-colors text-left group"
-                                >
-                                    <div className="flex items-center justify-center h-32 bg-muted rounded mb-3 group-hover:bg-muted/80">
-                                        <div className="text-xs text-center text-muted-foreground">
-                                            {key.includes('logo') ? '🖼️ Logo' : '📄 Texto'}
-                                        </div>
+                    {/* Templates personalizados do banco */}
+                    {customPresets.length > 0 && (
+                        <div className="space-y-3">
+                            <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                                <Layers className="h-4 w-4" />
+                                Meus Templates Personalizados
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {customPresets.map((preset) => (
+                                    <div key={preset.id} className="relative group">
+                                        <button
+                                            onClick={() => handleLoadPreset(preset)}
+                                            className="w-full border rounded-lg p-6 hover:border-primary hover:bg-accent/50 transition-colors text-left"
+                                        >
+                                            <div className="flex items-center justify-center h-32 bg-gradient-to-br from-primary/10 to-primary/5 rounded mb-3 group-hover:from-primary/20 group-hover:to-primary/10">
+                                                <Mail className="h-12 w-12 text-primary/60" />
+                                            </div>
+                                            <h4 className="font-semibold mb-1">{preset.name}</h4>
+                                            {preset.description && (
+                                                <p className="text-xs text-muted-foreground line-clamp-2">{preset.description}</p>
+                                            )}
+                                        </button>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleDeletePreset(preset.id)
+                                            }}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
                                     </div>
-                                    <h4 className="font-semibold mb-1">{preset.name}</h4>
-                                    <p className="text-xs text-muted-foreground">{preset.description}</p>
-                                </button>
-                            ))}
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Templates padrão do sistema */}
+                    <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-muted-foreground">Templates Padrão</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {/* Em branco */}
+                            <button
+                                onClick={handleStartFromScratch}
+                                className="border rounded-lg p-6 hover:border-primary hover:bg-accent/50 transition-colors text-left group"
+                            >
+                                <div className="flex items-center justify-center h-32 bg-muted rounded mb-3 group-hover:bg-muted/80">
+                                    <Plus className="h-12 w-12 text-muted-foreground" />
+                                </div>
+                                <h4 className="font-semibold mb-1">Em branco</h4>
+                                <p className="text-xs text-muted-foreground">Comece do zero com um editor vazio</p>
+                            </button>
+
+                            {/* Templates prontos */}
+                            {Object.entries(PRESET_TEMPLATES)
+                                .filter(([key]) => key !== 'blank')
+                                .map(([key, preset]) => (
+                                    <button
+                                        key={key}
+                                        onClick={() => handlePresetSelect(key)}
+                                        className="border rounded-lg p-6 hover:border-primary hover:bg-accent/50 transition-colors text-left group"
+                                    >
+                                        <div className="flex items-center justify-center h-32 bg-muted rounded mb-3 group-hover:bg-muted/80">
+                                            <div className="text-xs text-center text-muted-foreground">
+                                                {key.includes('logo') ? '🖼️ Logo' : '📄 Texto'}
+                                            </div>
+                                        </div>
+                                        <h4 className="font-semibold mb-1">{preset.name}</h4>
+                                        <p className="text-xs text-muted-foreground">{preset.description}</p>
+                                    </button>
+                                ))}
+                        </div>
                     </div>
 
                     <div className="text-center pt-2">
@@ -2114,6 +2256,7 @@ function EmailTemplatesTab({ org }: { org: Org }) {
                             ref={editorRef}
                             minHeight={600}
                             options={{ locale: 'pt-BR', features: { textEditor: { spellChecker: false } } }}
+                            onReady={() => setEditorReady(true)}
                         />
                     </div>
 
@@ -2132,21 +2275,68 @@ function EmailTemplatesTab({ org }: { org: Org }) {
 
             {/* Ações */}
             {!showTemplateSelector && (
-                <div className="flex items-center gap-3">
-                    <Button onClick={handleSave} disabled={saving}>
-                        {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                        Salvar template
-                    </Button>
-                    {hasCustom && (
-                        <Button variant="outline" onClick={handleDelete} disabled={deleting}>
-                            {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                            Restaurar padrão
+                <>
+                    <div className="flex items-center gap-3">
+                        <Button onClick={handleSave} disabled={saving}>
+                            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                            Salvar template
                         </Button>
-                    )}
-                    <span className="text-xs text-muted-foreground ml-auto">
-                        {hasCustom ? '✅ Template personalizado ativo' : 'Usando template padrão do sistema'}
-                    </span>
-                </div>
+                        <Button variant="outline" onClick={() => setShowSavePresetDialog(true)}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Salvar como preset
+                        </Button>
+                        {hasCustom && (
+                            <Button variant="outline" onClick={handleDelete} disabled={deleting}>
+                                {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                                Restaurar padrão
+                            </Button>
+                        )}
+                        <span className="text-xs text-muted-foreground ml-auto">
+                            {hasCustom ? '✅ Template personalizado ativo' : 'Usando template padrão do sistema'}
+                        </span>
+                    </div>
+
+                    {/* Dialog para salvar preset */}
+                    <Dialog open={showSavePresetDialog} onOpenChange={setShowSavePresetDialog}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Salvar como Template Reutilizável</DialogTitle>
+                                <DialogDescription>
+                                    Salve este design como um template que poderá ser reutilizado em qualquer tipo de e-mail.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="preset-name">Nome do template *</Label>
+                                    <Input
+                                        id="preset-name"
+                                        value={presetName}
+                                        onChange={(e) => setPresetName(e.target.value)}
+                                        placeholder="ex: Newsletter Mensal"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="preset-description">Descrição (opcional)</Label>
+                                    <Input
+                                        id="preset-description"
+                                        value={presetDescription}
+                                        onChange={(e) => setPresetDescription(e.target.value)}
+                                        placeholder="ex: Template colorido para campanhas mensais"
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setShowSavePresetDialog(false)}>
+                                    Cancelar
+                                </Button>
+                                <Button onClick={handleSaveAsPreset} disabled={!presetName.trim() || savingPreset}>
+                                    {savingPreset && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                                    Salvar preset
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </>
             )}
         </div>
     )
