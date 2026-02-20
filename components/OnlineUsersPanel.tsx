@@ -7,17 +7,9 @@ import { Button } from '@/components/ui/button'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
-import { api } from '@/lib/api'
 import { usePermissions } from '@/contexts/permissions-context'
-
-type OnlineUser = {
-    userId: string
-    userName: string
-    userImage: string | null
-    currentContactId: string | null
-    lastActivity: string
-    connectedAt: string
-}
+import { usePresenceContext, type UserPresence } from '@/contexts/presence-context'
+import { api } from '@/lib/api'
 
 type OrgMember = {
     id: string
@@ -30,15 +22,9 @@ type OrgMember = {
     }
 }
 
-type UserWithStatus = {
-    userId: string
-    userName: string
+type UserWithStatus = UserPresence & {
     userEmail: string
-    userImage: string | null
     userRole: string
-    isOnline: boolean
-    currentContactId: string | null
-    connectedAt: string | null
 }
 
 type Contact = {
@@ -52,11 +38,13 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
     contacts: Contact[]
 }) {
     const { data: perms } = usePermissions()
-    const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
     const [allMembers, setAllMembers] = useState<OrgMember[]>([])
     const [usersWithStatus, setUsersWithStatus] = useState<UserWithStatus[]>([])
     const [isOpen, setIsOpen] = useState(false)
     const [selectedUser, setSelectedUser] = useState<UserWithStatus | null>(null)
+
+    // Consome presença do Context Global (já conectado)
+    const { onlineUsers, isConnected } = usePresenceContext()
 
     // Carrega todos os membros da organização
     useEffect(() => {
@@ -74,125 +62,67 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
         loadMembers()
     }, [orgId])
 
-    // Carrega usuários online inicialmente e conecta ao SSE para atualizações em tempo real
-    useEffect(() => {
-        if (!orgId) return
-
-        // Carregamento inicial
-        const loadOnlineUsers = async () => {
-            try {
-                const { data } = await api.get('/agent/presence/online')
-                setOnlineUsers(data.users.filter((u: OnlineUser) => u.userId !== currentUserId))
-            } catch {
-                setOnlineUsers([])
-            }
-        }
-
-        loadOnlineUsers()
-
-        // Conecta ao SSE para atualizações em tempo real
-        const connectSSE = async () => {
-            try {
-                const token = document.cookie
-                    .split('; ')
-                    .find(row => row.startsWith('better_auth.session_token='))
-                    ?.split('=')[1]
-
-                if (!token) return
-
-                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-                const eventSource = new EventSource(`${baseUrl}/agent/sse`, {
-                    withCredentials: true,
-                })
-
-                eventSource.addEventListener('user_viewing', (event) => {
-                    const data = JSON.parse(event.data)
-                    if (data.userId === currentUserId) return
-
-                    setOnlineUsers(prev => {
-                        const filtered = prev.filter(u => u.userId !== data.userId)
-                        return [...filtered, {
-                            userId: data.userId,
-                            userName: data.userName,
-                            userImage: data.userImage,
-                            currentContactId: data.contactId || null,
-                            lastActivity: new Date().toISOString(),
-                            connectedAt: prev.find(u => u.userId === data.userId)?.connectedAt || new Date().toISOString(),
-                        }]
-                    })
-                })
-
-                eventSource.addEventListener('user_left', (event) => {
-                    const data = JSON.parse(event.data)
-                    setOnlineUsers(prev => prev.map(u =>
-                        u.userId === data.userId
-                            ? { ...u, currentContactId: null }
-                            : u
-                    ))
-                })
-
-                eventSource.onerror = () => {
-                    eventSource.close()
-                    // Fallback para polling em caso de erro no SSE
-                    setTimeout(connectSSE, 5000)
-                }
-
-                return () => {
-                    eventSource.close()
-                }
-            } catch (error) {
-                console.error('Erro ao conectar SSE:', error)
-            }
-        }
-
-        const cleanupSSE = connectSSE()
-
-        // Polling de fallback a cada 30s (menos frequente) para sincronizar estado
-        const fallbackInterval = setInterval(loadOnlineUsers, 30000)
-
-        return () => {
-            clearInterval(fallbackInterval)
-            cleanupSSE?.then(cleanup => cleanup?.())
-        }
-    }, [orgId, currentUserId])
-
-    // Combina membros com status online
+    // Combina membros com status online do WebSocket
     useEffect(() => {
         const combined = allMembers
             .filter(member => member.user.id !== currentUserId)
             .map(member => {
                 const onlineInfo = onlineUsers.find(ou => ou.userId === member.user.id)
-                return {
-                    userId: member.user.id,
-                    userName: member.user.name,
-                    userEmail: member.user.email,
-                    userImage: member.user.image,
-                    userRole: member.role,
-                    isOnline: !!onlineInfo,
-                    currentContactId: onlineInfo?.currentContactId || null,
-                    connectedAt: onlineInfo?.connectedAt || null,
+
+                if (onlineInfo) {
+                    // Usuário está online
+                    return {
+                        ...onlineInfo,
+                        userEmail: member.user.email,
+                        userRole: member.role,
+                    }
+                } else {
+                    // Usuário está offline
+                    return {
+                        userId: member.user.id,
+                        userName: member.user.name,
+                        userEmail: member.user.email,
+                        userImage: member.user.image,
+                        userRole: member.role,
+                        organizationId: orgId || '',
+                        status: 'offline' as const,
+                        currentContactId: null,
+                        currentRoute: null,
+                        lastActivity: new Date(),
+                        connectedAt: new Date(),
+                    }
                 }
             })
             // Ordena: online primeiro, depois por nome
             .sort((a, b) => {
-                if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1
+                if (a.status !== b.status) {
+                    if (a.status === 'online') return -1
+                    if (b.status === 'online') return 1
+                    if (a.status === 'away') return -1
+                    if (b.status === 'away') return 1
+                }
                 return a.userName.localeCompare(b.userName)
             })
 
-        setUsersWithStatus(combined)
-    }, [allMembers, onlineUsers, currentUserId])
+        setUsersWithStatus(combined as UserWithStatus[])
+    }, [allMembers, onlineUsers, currentUserId, orgId])
 
     // Calcula tempo online
-    function getTimeOnline(connectedAt: string | null): string {
+    function getTimeOnline(connectedAt: Date | string | null): string {
         if (!connectedAt) return 'Offline'
 
         const now = new Date()
-        const connected = new Date(connectedAt)
+        const connected = connectedAt instanceof Date ? connectedAt : new Date(connectedAt)
         const diff = Math.floor((now.getTime() - connected.getTime()) / 1000)
 
         if (diff < 60) return `${diff}s`
         if (diff < 3600) return `${Math.floor(diff / 60)}m`
         return `${Math.floor(diff / 3600)}h${Math.floor((diff % 3600) / 60)}m`
+    }
+
+    // Verifica se usuário está online
+    function isUserOnline(status: 'online' | 'away' | 'offline'): boolean {
+        return status !== 'offline'
     }
 
     // Traduz o papel do usuário
@@ -234,7 +164,7 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
                     )}
                 </div>
                 <span>
-                    {usersWithStatus.length} Usuários ({onlineUsers.length} online)
+                    {usersWithStatus.length} Usuários ({usersWithStatus.filter(u => u.status !== 'offline').length} online)
                 </span>
             </button>
 
@@ -247,10 +177,10 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
                             Usuários da Equipe ({usersWithStatus.length})
                         </DialogTitle>
                         <DialogDescription>
-                            {onlineUsers.length > 0 ? (
+                            {usersWithStatus.filter(u => u.status !== 'offline').length > 0 ? (
                                 <span className="flex items-center gap-1">
                                     <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                                    {onlineUsers.length} online agora
+                                    {usersWithStatus.filter(u => u.status !== 'offline').length} online agora
                                 </span>
                             ) : (
                                 'Nenhum usuário online no momento'
@@ -279,14 +209,15 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
                                             </AvatarFallback>
                                         </Avatar>
                                         <span className={`absolute bottom-0 right-0 flex h-3 w-3 rounded-full border-2 border-background ${
-                                            user.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                                            user.status === 'online' ? 'bg-green-500' :
+                                            user.status === 'away' ? 'bg-yellow-500' : 'bg-gray-400'
                                         }`}></span>
                                     </div>
 
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate">{user.userName}</p>
                                         <p className="text-xs text-muted-foreground truncate">
-                                            {user.isOnline ? (
+                                            {user.status !== 'offline' ? (
                                                 <>👁️ {getContactName(user.currentContactId)}</>
                                             ) : (
                                                 <>{getRoleLabel(user.userRole)} • {user.userEmail}</>
@@ -296,7 +227,7 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
 
                                     <div className="text-right shrink-0">
                                         <p className="text-xs text-muted-foreground">
-                                            {getTimeOnline(user.connectedAt)}
+                                            {user.status !== 'offline' ? getTimeOnline(user.connectedAt) : 'Offline'}
                                         </p>
                                     </div>
                                 </button>
@@ -320,7 +251,8 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
                                         </AvatarFallback>
                                     </Avatar>
                                     <span className={`absolute bottom-0 right-0 flex h-2.5 w-2.5 rounded-full border-2 border-background ${
-                                        selectedUser.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                                        selectedUser.status === 'online' ? 'bg-green-500' :
+                                        selectedUser.status === 'away' ? 'bg-yellow-500' : 'bg-gray-400'
                                     }`}></span>
                                 </div>
                                 {selectedUser.userName}
@@ -332,12 +264,15 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-muted-foreground">Status:</span>
                                     <span className={`flex items-center gap-1 font-medium ${
-                                        selectedUser.isOnline ? 'text-green-600' : 'text-gray-600'
+                                        selectedUser.status === 'online' ? 'text-green-600' :
+                                        selectedUser.status === 'away' ? 'text-yellow-600' : 'text-gray-600'
                                     }`}>
                                         <span className={`h-2 w-2 rounded-full ${
-                                            selectedUser.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                                            selectedUser.status === 'online' ? 'bg-green-500' :
+                                            selectedUser.status === 'away' ? 'bg-yellow-500' : 'bg-gray-400'
                                         }`}></span>
-                                        {selectedUser.isOnline ? 'Online' : 'Offline'}
+                                        {selectedUser.status === 'online' ? 'Online' :
+                                         selectedUser.status === 'away' ? 'Ausente' : 'Offline'}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-sm">
@@ -348,7 +283,7 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
                                     <span className="text-muted-foreground">E-mail:</span>
                                     <span className="font-medium text-right text-xs">{selectedUser.userEmail}</span>
                                 </div>
-                                {selectedUser.isOnline && (
+                                {selectedUser.status !== 'offline' && (
                                     <>
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">Tempo online:</span>
@@ -362,7 +297,7 @@ export function OnlineUsersPanel({ orgId, currentUserId, contacts }: {
                                 )}
                             </div>
 
-                            {selectedUser.isOnline && selectedUser.currentContactId && (
+                            {selectedUser.status !== 'offline' && selectedUser.currentContactId && (
                                 <Button
                                     className="w-full"
                                     onClick={() => {

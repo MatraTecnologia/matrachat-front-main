@@ -34,6 +34,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { PermissionsContext, type OrgPermissions } from '@/contexts/permissions-context'
+import { PresenceProvider } from '@/contexts/presence-context'
 import { ThemeToggle } from '@/components/theme-toggle'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
@@ -261,13 +262,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [permissionsLoading, setPermissionsLoading] = useState(true)
 
     // Usuário logado
+    const [userId, setUserId]       = useState<string | null>(null)
     const [userName, setUserName]   = useState('')
+    const [userEmail, setUserEmail] = useState('')
     const [userImage, setUserImage] = useState('')
 
     useEffect(() => {
         api.get('/users/me')
             .then(({ data }) => {
+                setUserId(data.id ?? null)
                 setUserName(data.name ?? '')
+                setUserEmail(data.email ?? '')
                 setUserImage(data.image ?? '')
             })
             .catch(() => null)
@@ -307,7 +312,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <TooltipProvider delayDuration={200}>
-            <div className="flex h-svh overflow-hidden bg-background">
+            <PresenceProvider
+                userId={userId}
+                userName={userName}
+                userEmail={userEmail}
+                userImage={userImage}
+                userRole={permissions?.role || null}
+                organizationId={orgId}
+            >
+                <div className="flex h-svh overflow-hidden bg-background">
                 {/* ── Sidebar ── */}
                 <aside
                     className={cn(
@@ -603,6 +616,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Global real-time notifications (active on all pages except /conversations) */}
             <GlobalNotifications orgId={orgId} />
+            </PresenceProvider>
         </TooltipProvider>
     )
 }
