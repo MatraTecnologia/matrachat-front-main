@@ -1780,6 +1780,352 @@ const PRESET_TEMPLATES: Record<string, { name: string; description: string; desi
         description: 'Comece do zero',
         design: {},
     },
+    // ═══ VERIFICAÇÃO DE E-MAIL ═══
+    'verification-modern': {
+        name: 'Verificação Moderna',
+        description: 'Design moderno para verificação de e-mail',
+        design: {
+            body: {
+                rows: [
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'image',
+                                values: {
+                                    src: { url: 'https://via.placeholder.com/150x60?text=Logo' },
+                                    textAlign: 'center',
+                                    containerPadding: '40px 20px 20px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<h1 style="color: #1a202c; font-size: 28px; margin: 0 0 16px;">Verifique seu e-mail</h1><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0;">Olá <strong>{{name}}</strong>,</p><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 16px 0;">Obrigado por se cadastrar! Para começar a usar sua conta, precisamos verificar seu endereço de e-mail.</p>',
+                                    containerPadding: '20px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'button',
+                                values: {
+                                    text: 'Verificar E-mail',
+                                    href: '{{url}}',
+                                    buttonColors: {
+                                        color: '#ffffff',
+                                        backgroundColor: '#4f46e5',
+                                        hoverColor: '#ffffff',
+                                        hoverBackgroundColor: '#4338ca',
+                                    },
+                                    size: { width: '100%', autoWidth: false },
+                                    containerPadding: '20px 40px',
+                                    borderRadius: '8px',
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<p style="color: #718096; font-size: 14px; line-height: 1.6; margin: 0;">Ou copie e cole este link no seu navegador:</p><p style="color: #4f46e5; font-size: 13px; word-break: break-all; margin: 8px 0 0;">{{url}}</p>',
+                                    containerPadding: '20px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'divider',
+                                values: {
+                                    containerPadding: '20px 40px',
+                                    border: { borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: '#e2e8f0' },
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<p style="color: #a0aec0; font-size: 13px; line-height: 1.6; margin: 0;">Se você não criou esta conta, pode ignorar este e-mail.</p><p style="color: #a0aec0; font-size: 13px; margin: 16px 0 0;">Atenciosamente,<br><strong>Equipe MatraChat</strong></p>',
+                                    containerPadding: '20px 40px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                ]
+            }
+        },
+    },
+    // ═══ LINK MÁGICO ═══
+    'magic-link-simple': {
+        name: 'Link Mágico Simples',
+        description: 'Acesso rápido sem senha',
+        design: {
+            body: {
+                rows: [
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'image',
+                                values: {
+                                    src: { url: 'https://via.placeholder.com/150x60?text=Logo' },
+                                    textAlign: 'center',
+                                    containerPadding: '40px 20px 20px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<h1 style="color: #1a202c; font-size: 28px; margin: 0 0 16px; text-align: center;">🔑 Seu link de acesso</h1><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0; text-align: center;">Clique no botão abaixo para fazer login sem senha.</p>',
+                                    containerPadding: '20px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'button',
+                                values: {
+                                    text: 'Acessar Minha Conta',
+                                    href: '{{url}}',
+                                    buttonColors: {
+                                        color: '#ffffff',
+                                        backgroundColor: '#10b981',
+                                        hoverColor: '#ffffff',
+                                        hoverBackgroundColor: '#059669',
+                                    },
+                                    size: { width: '100%', autoWidth: false },
+                                    containerPadding: '20px 40px',
+                                    borderRadius: '8px',
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<p style="color: #ef4444; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;"><strong>⚠️ Este link expira em 15 minutos</strong></p>',
+                                    containerPadding: '20px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<p style="color: #a0aec0; font-size: 13px; line-height: 1.6; margin: 0; text-align: center;">Se você não solicitou este link, ignore este e-mail.</p>',
+                                    containerPadding: '20px 40px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                ]
+            }
+        },
+    },
+    // ═══ REDEFINIÇÃO DE SENHA ═══
+    'reset-password-secure': {
+        name: 'Redefinição Segura',
+        description: 'Template para redefinir senha',
+        design: {
+            body: {
+                rows: [
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'image',
+                                values: {
+                                    src: { url: 'https://via.placeholder.com/150x60?text=Logo' },
+                                    textAlign: 'center',
+                                    containerPadding: '40px 20px 20px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<h1 style="color: #1a202c; font-size: 28px; margin: 0 0 16px;">Redefinir sua senha</h1><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0;">Olá <strong>{{name}}</strong>,</p><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 16px 0;">Recebemos uma solicitação para redefinir a senha da sua conta. Clique no botão abaixo para criar uma nova senha.</p>',
+                                    containerPadding: '20px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'button',
+                                values: {
+                                    text: 'Redefinir Senha',
+                                    href: '{{url}}',
+                                    buttonColors: {
+                                        color: '#ffffff',
+                                        backgroundColor: '#f59e0b',
+                                        hoverColor: '#ffffff',
+                                        hoverBackgroundColor: '#d97706',
+                                    },
+                                    size: { width: '100%', autoWidth: false },
+                                    containerPadding: '20px 40px',
+                                    borderRadius: '8px',
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px;"><p style="color: #92400e; font-size: 14px; line-height: 1.6; margin: 0;"><strong>⚠️ Importante:</strong></p><ul style="color: #92400e; font-size: 14px; margin: 8px 0 0; padding-left: 20px;"><li>Este link expira em 1 hora</li><li>Se você não solicitou esta alteração, ignore este e-mail</li><li>Sua senha atual permanece ativa até que você crie uma nova</li></ul></div>',
+                                    containerPadding: '20px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<p style="color: #a0aec0; font-size: 13px; line-height: 1.6; margin: 0;">Para sua segurança, recomendamos usar uma senha forte com pelo menos 8 caracteres, incluindo letras maiúsculas, minúsculas e números.</p>',
+                                    containerPadding: '20px 40px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                ]
+            }
+        },
+    },
+    // ═══ CÓDIGO OTP ═══
+    'otp-code-modern': {
+        name: 'Código OTP Moderno',
+        description: 'Template para código de verificação',
+        design: {
+            body: {
+                rows: [
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'image',
+                                values: {
+                                    src: { url: 'https://via.placeholder.com/150x60?text=Logo' },
+                                    textAlign: 'center',
+                                    containerPadding: '40px 20px 20px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<h1 style="color: #1a202c; font-size: 28px; margin: 0 0 16px; text-align: center;">Seu código de verificação</h1><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0; text-align: center;">Use o código abaixo para completar sua autenticação:</p>',
+                                    containerPadding: '20px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 32px; border-radius: 12px; text-align: center;"><p style="color: #ffffff; font-size: 48px; font-weight: bold; letter-spacing: 8px; margin: 0; font-family: monospace;">{{otp}}</p></div>',
+                                    containerPadding: '20px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<p style="color: #ef4444; font-size: 14px; font-weight: bold; line-height: 1.6; margin: 0; text-align: center;">⏱️ Este código expira em 10 minutos</p>',
+                                    containerPadding: '20px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'divider',
+                                values: {
+                                    containerPadding: '20px 40px',
+                                    border: { borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: '#e2e8f0' },
+                                }
+                            }]
+                        }]
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'text',
+                                values: {
+                                    text: '<p style="color: #718096; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;"><strong>Dica de segurança:</strong> Nunca compartilhe este código com ninguém. Nossa equipe nunca solicitará este código por telefone ou e-mail.</p>',
+                                    containerPadding: '20px 40px 40px',
+                                }
+                            }]
+                        }]
+                    },
+                ]
+            }
+        },
+    },
+    // ═══ TEMPLATES GENÉRICOS ═══
     'simple-logo': {
         name: 'Simples com logo',
         description: 'Template minimalista com logo no topo',
@@ -1792,9 +2138,9 @@ const PRESET_TEMPLATES: Record<string, { name: string; description: string; desi
                             contents: [{
                                 type: 'image',
                                 values: {
-                                    src: { url: 'https://via.placeholder.com/150x60?text=Logo' },
+                                    src: { url: 'https://via.placeholder.com/180x70?text=Logo' },
                                     textAlign: 'center',
-                                    containerPadding: '20px',
+                                    containerPadding: '40px 20px 30px',
                                 }
                             }]
                         }]
@@ -1805,8 +2151,8 @@ const PRESET_TEMPLATES: Record<string, { name: string; description: string; desi
                             contents: [{
                                 type: 'text',
                                 values: {
-                                    text: '<h2>Título do E-mail</h2><p>Seu conteúdo aqui.</p>',
-                                    containerPadding: '20px',
+                                    text: '<h2 style="color: #1a202c; font-size: 24px; margin: 0 0 16px;">Título do E-mail</h2><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0;">Olá,</p><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 16px 0;">Seu conteúdo aqui. Personalize como quiser.</p><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 16px 0 0;">Atenciosamente,<br><strong>Sua Equipe</strong></p>',
+                                    containerPadding: '20px 40px 40px',
                                 }
                             }]
                         }]
@@ -1827,8 +2173,8 @@ const PRESET_TEMPLATES: Record<string, { name: string; description: string; desi
                             contents: [{
                                 type: 'text',
                                 values: {
-                                    text: '<h2>Título do E-mail</h2><p>Seu conteúdo aqui.</p>',
-                                    containerPadding: '20px',
+                                    text: '<h2 style="color: #1a202c; font-size: 24px; margin: 0 0 16px;">Título do E-mail</h2><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0;">Olá,</p><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 16px 0;">Seu conteúdo aqui. Personalize como quiser.</p><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 16px 0 0;">Atenciosamente,<br><strong>Sua Equipe</strong></p>',
+                                    containerPadding: '40px',
                                 }
                             }]
                         }]
@@ -1851,11 +2197,11 @@ const PRESET_TEMPLATES: Record<string, { name: string; description: string; desi
                                 values: {
                                     src: { url: 'https://via.placeholder.com/200x80?text=Logo' },
                                     textAlign: 'center',
-                                    containerPadding: '30px',
+                                    containerPadding: '40px 20px',
                                 }
                             }]
                         }],
-                        values: { backgroundColor: '#f8f9fa' }
+                        values: { backgroundColor: '#f7fafc' }
                     },
                     {
                         cells: [1],
@@ -1863,8 +2209,21 @@ const PRESET_TEMPLATES: Record<string, { name: string; description: string; desi
                             contents: [{
                                 type: 'text',
                                 values: {
-                                    text: '<h1>Bem-vindo!</h1><p>Este é um template profissional.</p>',
+                                    text: '<h1 style="color: #1a202c; font-size: 28px; margin: 0 0 24px;">Bem-vindo!</h1><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0;">Este é um template profissional completo com cabeçalho, conteúdo e rodapé.</p><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 16px 0;">Personalize o conteúdo de acordo com suas necessidades.</p>',
                                     containerPadding: '40px',
+                                }
+                            }]
+                        }],
+                        values: { backgroundColor: '#ffffff' }
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'divider',
+                                values: {
+                                    containerPadding: '0',
+                                    border: { borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: '#e2e8f0' },
                                 }
                             }]
                         }]
@@ -1875,12 +2234,12 @@ const PRESET_TEMPLATES: Record<string, { name: string; description: string; desi
                             contents: [{
                                 type: 'text',
                                 values: {
-                                    text: '<p style="text-align: center; color: #6c757d; font-size: 12px;">© 2024 Sua Empresa. Todos os direitos reservados.</p>',
-                                    containerPadding: '20px',
+                                    text: '<p style="text-align: center; color: #718096; font-size: 14px; margin: 0;">Precisa de ajuda? <a href="mailto:suporte@empresa.com" style="color: #4f46e5; text-decoration: none;">Entre em contato</a></p><p style="text-align: center; color: #a0aec0; font-size: 12px; margin: 16px 0 0;">© 2025 Sua Empresa. Todos os direitos reservados.</p>',
+                                    containerPadding: '30px 20px',
                                 }
                             }]
                         }],
-                        values: { backgroundColor: '#f8f9fa' }
+                        values: { backgroundColor: '#f7fafc' }
                     },
                 ]
             }
@@ -1898,8 +2257,21 @@ const PRESET_TEMPLATES: Record<string, { name: string; description: string; desi
                             contents: [{
                                 type: 'text',
                                 values: {
-                                    text: '<h1>Bem-vindo!</h1><p>Este é um template profissional.</p>',
+                                    text: '<h1 style="color: #1a202c; font-size: 28px; margin: 0 0 24px; text-align: center;">Bem-vindo!</h1><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 0;">Este é um template profissional completo sem logo.</p><p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin: 16px 0;">Ideal para e-mails transacionais e notificações importantes.</p>',
                                     containerPadding: '40px',
+                                }
+                            }]
+                        }],
+                        values: { backgroundColor: '#ffffff' }
+                    },
+                    {
+                        cells: [1],
+                        columns: [{
+                            contents: [{
+                                type: 'divider',
+                                values: {
+                                    containerPadding: '0',
+                                    border: { borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: '#e2e8f0' },
                                 }
                             }]
                         }]
@@ -1910,12 +2282,12 @@ const PRESET_TEMPLATES: Record<string, { name: string; description: string; desi
                             contents: [{
                                 type: 'text',
                                 values: {
-                                    text: '<p style="text-align: center; color: #6c757d; font-size: 12px;">© 2024 Sua Empresa. Todos os direitos reservados.</p>',
-                                    containerPadding: '20px',
+                                    text: '<p style="text-align: center; color: #718096; font-size: 14px; margin: 0;">Precisa de ajuda? <a href="mailto:suporte@empresa.com" style="color: #4f46e5; text-decoration: none;">Entre em contato</a></p><p style="text-align: center; color: #a0aec0; font-size: 12px; margin: 16px 0 0;">© 2025 Sua Empresa. Todos os direitos reservados.</p>',
+                                    containerPadding: '30px 20px',
                                 }
                             }]
                         }],
-                        values: { backgroundColor: '#f8f9fa' }
+                        values: { backgroundColor: '#f7fafc' }
                     },
                 ]
             }
