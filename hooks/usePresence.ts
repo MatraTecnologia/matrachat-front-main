@@ -54,8 +54,8 @@ export function usePresence(options: UsePresenceOptions): UsePresenceReturn {
     const [onlineUsers, setOnlineUsers] = useState<UserPresence[]>([])
 
     const pathname = usePathname()
-    const heartbeatIntervalRef = useRef<NodeJS.Timeout>()
-    const idleTimeoutRef = useRef<NodeJS.Timeout>()
+    const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null)
+    const idleTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const lastActivityRef = useRef<Date>(new Date())
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -135,7 +135,7 @@ export function usePresence(options: UsePresenceOptions): UsePresenceReturn {
     function stopHeartbeat() {
         if (heartbeatIntervalRef.current) {
             clearInterval(heartbeatIntervalRef.current)
-            heartbeatIntervalRef.current = undefined
+            heartbeatIntervalRef.current = null
         }
     }
 
