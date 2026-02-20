@@ -20,7 +20,8 @@ import {
     Mail,
     MessageCircle,
     Phone,
-
+    Wifi,
+    WifiOff,
     FlaskConical,
     Sparkles,
     Zap,
@@ -34,7 +35,8 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { PermissionsContext, type OrgPermissions } from '@/contexts/permissions-context'
-import { PresenceProvider } from '@/contexts/presence-context'
+import { PresenceProvider, usePresenceContext } from '@/contexts/presence-context'
+import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 import { ThemeToggle } from '@/components/theme-toggle'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
@@ -222,6 +224,360 @@ function ChannelSubItem({ channel, active }: { channel: Channel; active: boolean
     )
 }
 
+// ── Sidebar Content ────────────────────────────────────────────────────────
+
+function SidebarContent({
+    expanded,
+    setExpanded,
+    pathname,
+    activeChannelId,
+    orgId,
+    orgName,
+    orgLogo,
+    orgLogoBg,
+    orgLogoFit,
+    permissions,
+    sidebarChannels,
+    sidebarTags,
+    userName,
+    userImage,
+    userId,
+}: {
+    expanded: boolean
+    setExpanded: (v: boolean | ((v: boolean) => boolean)) => void
+    pathname: string
+    activeChannelId: string | null
+    orgId: string | null
+    orgName: string
+    orgLogo: string
+    orgLogoBg: string | null
+    orgLogoFit: 'contain' | 'cover' | 'fill'
+    permissions: OrgPermissions | null
+    sidebarChannels: Channel[]
+    sidebarTags: SidebarTag[]
+    userName: string
+    userImage: string
+    userId: string | null
+}) {
+    const { isConnected, onlineUsers } = usePresenceContext()
+
+    return (
+        <aside
+            className={cn(
+                'flex shrink-0 flex-col border-r bg-background py-3 transition-all duration-200 ease-in-out overflow-hidden',
+                expanded ? 'w-52 items-stretch px-2' : 'w-14 items-center px-0'
+            )}
+        >
+            {/* Logo + WiFi + toggle */}
+            <div className={cn(
+                'flex items-center mb-2',
+                expanded ? 'justify-between px-1' : 'flex-col gap-2'
+            )}>
+                <div
+                    className={cn(
+                        'flex shrink-0 items-center justify-center rounded-lg overflow-hidden font-bold select-none',
+                        expanded ? 'h-8 w-8 text-sm' : 'h-10 w-10 text-lg',
+                        !orgLogo && 'bg-primary text-primary-foreground'
+                    )}
+                    style={orgLogo && orgLogoBg ? { backgroundColor: orgLogoBg } : undefined}
+                >
+                    {orgLogo ? (
+                        <img
+                            src={orgLogo}
+                            alt={orgName || 'Logo'}
+                            className={cn('h-full w-full dark-mode-logo-invert', {
+                                'object-contain p-1': orgLogoFit === 'contain',
+                                'object-cover': orgLogoFit === 'cover',
+                                'object-fill': orgLogoFit === 'fill',
+                            })}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                        />
+                    ) : (
+                        (orgName || 'M').charAt(0).toUpperCase()
+                    )}
+                </div>
+
+                <div className={cn('flex items-center', expanded ? 'gap-1' : 'gap-2')}>
+                    {/* WiFi Indicator */}
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className={cn(
+                                'flex h-8 w-8 items-center justify-center rounded-lg',
+                                isConnected ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'
+                            )}>
+                                {isConnected ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                            {isConnected ? `🟢 Conectado (${onlineUsers.length} online)` : '🔴 Desconectado'}
+                        </TooltipContent>
+                    </Tooltip>
+
+                    <ThemeToggle />
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                onClick={() => setExpanded((v) => !v)}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                            >
+                                {expanded
+                                    ? <PanelLeftClose className="h-4 w-4" />
+                                    : <PanelLeftOpen className="h-4 w-4" />
+                                }
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                            {expanded ? 'Recolher menu' : 'Expandir menu'}
+                        </TooltipContent>
+                    </Tooltip>
+                </div>
+            </div>
+
+            <div className={cn('h-px bg-border mb-2', expanded ? 'mx-1' : 'w-8')} />
+
+            {/* Main nav */}
+            <nav className={cn(
+                'flex flex-1 flex-col gap-0.5 overflow-y-auto',
+                expanded ? 'items-stretch' : 'items-center'
+            )}>
+                {/* Relatórios */}
+                {permissions?.permissions.canViewDashboard !== false && (
+                    <NavItem
+                        href="/dashboard"
+                        icon={BarChart2}
+                        label="Relatórios"
+                        active={pathname.startsWith('/dashboard')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* Conversas com submenus de canais */}
+                {permissions?.permissions.canViewConversations !== false && (
+                <NavItemCollapsible
+                    href="/conversations"
+                    icon={MessageSquare}
+                    label="Conversas"
+                    active={pathname.startsWith('/conversations')}
+                    expanded={expanded}
+                >
+                    {sidebarChannels.length === 0 && sidebarTags.length === 0 && (
+                        <span className="px-2 py-1.5 text-xs text-muted-foreground/60 italic">
+                            Nenhum canal ativo
+                        </span>
+                    )}
+                    {sidebarChannels.map((ch) => (
+                        <ChannelSubItem
+                            key={ch.id}
+                            channel={ch}
+                            active={activeChannelId === ch.id}
+                        />
+                    ))}
+
+                    {/* Tags abaixo dos canais */}
+                    {sidebarTags.length > 0 && (
+                        <>
+                            {sidebarChannels.length > 0 && (
+                                <div className="my-1 h-px bg-border/60" />
+                            )}
+                            {sidebarTags.map((tag) => {
+                                const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+                                const activeTagId = searchParams?.get('tagId')
+                                return (
+                                    <Link
+                                        key={tag.id}
+                                        href={`/conversations?tagId=${tag.id}`}
+                                        className={cn(
+                                            'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+                                            activeTagId === tag.id
+                                                ? 'bg-primary/10 text-primary font-medium'
+                                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                        )}
+                                    >
+                                        <span
+                                            className="h-2 w-2 shrink-0 rounded-full"
+                                            style={{ backgroundColor: tag.color }}
+                                        />
+                                        <span className="flex-1 truncate">{tag.name}</span>
+                                    </Link>
+                                )
+                            })}
+                        </>
+                    )}
+                </NavItemCollapsible>
+                )}
+
+                {/* Canais */}
+                {permissions?.permissions.canManageChannels !== false && (
+                    <NavItem
+                        href="/channels"
+                        icon={Hash}
+                        label="Canais"
+                        active={pathname.startsWith('/channels')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* Copiloto — visível apenas em desenvolvimento local */}
+                {process.env.NODE_ENV === 'development' && (
+                <NavItemCollapsible
+                    href="/copilot"
+                    icon={Bot}
+                    label="Capitão / Copiloto"
+                    active={pathname.startsWith('/copilot')}
+                    expanded={expanded}
+                >
+                    <Link
+                        href="/copilot"
+                        className={cn(
+                            'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+                            pathname === '/copilot'
+                                ? 'bg-primary/10 text-primary font-medium'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                    >
+                        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                        <span className="flex-1 truncate">Agentes</span>
+                    </Link>
+                    <Link
+                        href="/copilot/rules"
+                        className={cn(
+                            'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+                            pathname.startsWith('/copilot/rules')
+                                ? 'bg-primary/10 text-primary font-medium'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                    >
+                        <Zap className="h-3.5 w-3.5 shrink-0" />
+                        <span className="flex-1 truncate">Regras</span>
+                    </Link>
+                </NavItemCollapsible>
+                )}
+
+                {/* Contatos */}
+                {permissions?.permissions.canManageContacts !== false && (
+                    <NavItem
+                        href="/contacts"
+                        icon={Users}
+                        label="Contatos"
+                        active={pathname.startsWith('/contacts')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* Kanban */}
+                {permissions?.permissions.canViewConversations !== false && (
+                    <NavItem
+                        href="/kanban"
+                        icon={Kanban}
+                        label="Kanban"
+                        active={pathname.startsWith('/kanban')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* Campanhas */}
+                {permissions?.permissions.canManageCampaigns !== false && (
+                    <NavItem
+                        href="/campaigns"
+                        icon={Megaphone}
+                        label="Campanhas"
+                        active={pathname.startsWith('/campaigns')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* Central de Ajuda */}
+                <NavItem
+                    href="/help-center"
+                    icon={BookOpen}
+                    label="Central de Ajuda"
+                    active={pathname.startsWith('/help-center')}
+                    expanded={expanded}
+                />
+
+                {/* Changelog / Logs */}
+                <NavItem
+                    href="/logs"
+                    icon={ListTodo}
+                    label="Changelog"
+                    active={pathname.startsWith('/logs')}
+                    expanded={expanded}
+                />
+
+                {/* Teste do Widget */}
+                <NavItem
+                    href="/test"
+                    icon={FlaskConical}
+                    label="Teste do Widget"
+                    active={pathname.startsWith('/test')}
+                    expanded={expanded}
+                />
+            </nav>
+
+            {/* Online Users Panel */}
+            {expanded && orgId && userId && (
+                <>
+                    <div className="h-px bg-border my-2 mx-1" />
+                    <div className="px-1 max-h-48 overflow-y-auto">
+                        <OnlineUsersPanel
+                            orgId={orgId}
+                            currentUserId={userId}
+                            contacts={[]}
+                        />
+                    </div>
+                </>
+            )}
+
+            {/* Bottom */}
+            <div className={cn(
+                'flex flex-col gap-0.5 pt-2',
+                expanded ? 'items-stretch' : 'items-center'
+            )}>
+                <div className={cn('h-px bg-border mb-2', expanded ? 'mx-1' : 'w-8')} />
+
+                {(permissions === null || permissions.permissions.canManageSettings || permissions.permissions.canManageMembers || permissions.permissions.canManageTags) && (
+                    <NavItem
+                        href="/settings"
+                        icon={Settings}
+                        label="Configurações"
+                        active={pathname.startsWith('/settings')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* User avatar */}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Link
+                            href="/account"
+                            className={cn(
+                                'mt-1 flex items-center gap-2 rounded-lg p-1.5 ring-2 ring-transparent hover:ring-primary transition-all',
+                                expanded ? 'w-full' : '',
+                                pathname.startsWith('/account') && 'ring-primary'
+                            )}
+                        >
+                            <Avatar className="h-7 w-7 shrink-0">
+                                {userImage && <AvatarImage src={userImage} alt={userName} />}
+                                <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                                    {userName ? userName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() : '?'}
+                                </AvatarFallback>
+                            </Avatar>
+                            {expanded && (
+                                <span className="truncate text-sm font-medium text-foreground">
+                                    {userName || 'Minha conta'}
+                                </span>
+                            )}
+                        </Link>
+                    </TooltipTrigger>
+                    {!expanded && (
+                        <TooltipContent side="right">Minha conta</TooltipContent>
+                    )}
+                </Tooltip>
+            </div>
+        </aside>
+    )
+}
+
 // ── Layout ─────────────────────────────────────────────────────────────────
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -322,289 +678,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
                 <div className="flex h-svh overflow-hidden bg-background">
                 {/* ── Sidebar ── */}
-                <aside
-                    className={cn(
-                        'flex shrink-0 flex-col border-r bg-background py-3 transition-all duration-200 ease-in-out overflow-hidden',
-                        expanded ? 'w-52 items-stretch px-2' : 'w-14 items-center px-0'
-                    )}
-                >
-                    {/* Logo + toggle */}
-                    <div className={cn(
-                        'flex items-center mb-2',
-                        expanded ? 'justify-between px-1' : 'flex-col gap-2'
-                    )}>
-                        <div
-                            className={cn(
-                                'flex shrink-0 items-center justify-center rounded-lg overflow-hidden font-bold select-none',
-                                expanded ? 'h-8 w-8 text-sm' : 'h-10 w-10 text-lg',
-                                !orgLogo && 'bg-primary text-primary-foreground'
-                            )}
-                            style={orgLogo && orgLogoBg ? { backgroundColor: orgLogoBg } : undefined}
-                        >
-                            {orgLogo ? (
-                                <img
-                                    src={orgLogo}
-                                    alt={orgName || 'Logo'}
-                                    className={cn('h-full w-full dark-mode-logo-invert', {
-                                        'object-contain p-1': orgLogoFit === 'contain',
-                                        'object-cover': orgLogoFit === 'cover',
-                                        'object-fill': orgLogoFit === 'fill',
-                                    })}
-                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                                />
-                            ) : (
-                                (orgName || 'M').charAt(0).toUpperCase()
-                            )}
-                        </div>
-
-                        <div className={cn('flex items-center', expanded ? 'gap-1' : 'gap-2')}>
-                            <ThemeToggle />
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        onClick={() => setExpanded((v) => !v)}
-                                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                                    >
-                                        {expanded
-                                            ? <PanelLeftClose className="h-4 w-4" />
-                                            : <PanelLeftOpen className="h-4 w-4" />
-                                        }
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="right">
-                                    {expanded ? 'Recolher menu' : 'Expandir menu'}
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
-                    </div>
-
-                    <div className={cn('h-px bg-border mb-2', expanded ? 'mx-1' : 'w-8')} />
-
-                    {/* Main nav */}
-                    <nav className={cn(
-                        'flex flex-1 flex-col gap-0.5 overflow-y-auto',
-                        expanded ? 'items-stretch' : 'items-center'
-                    )}>
-                        {/* Relatórios */}
-                        {permissions?.permissions.canViewDashboard !== false && (
-                            <NavItem
-                                href="/dashboard"
-                                icon={BarChart2}
-                                label="Relatórios"
-                                active={pathname.startsWith('/dashboard')}
-                                expanded={expanded}
-                            />
-                        )}
-
-                        {/* Conversas com submenus de canais */}
-                        {permissions?.permissions.canViewConversations !== false && (
-                        <NavItemCollapsible
-                            href="/conversations"
-                            icon={MessageSquare}
-                            label="Conversas"
-                            active={pathname.startsWith('/conversations')}
-                            expanded={expanded}
-                        >
-                            {sidebarChannels.length === 0 && sidebarTags.length === 0 && (
-                                <span className="px-2 py-1.5 text-xs text-muted-foreground/60 italic">
-                                    Nenhum canal ativo
-                                </span>
-                            )}
-                            {sidebarChannels.map((ch) => (
-                                <ChannelSubItem
-                                    key={ch.id}
-                                    channel={ch}
-                                    active={activeChannelId === ch.id}
-                                />
-                            ))}
-
-                            {/* Tags abaixo dos canais */}
-                            {sidebarTags.length > 0 && (
-                                <>
-                                    {sidebarChannels.length > 0 && (
-                                        <div className="my-1 h-px bg-border/60" />
-                                    )}
-                                    {sidebarTags.map((tag) => {
-                                        const activeTagId = searchParams?.get('tagId')
-                                        return (
-                                            <Link
-                                                key={tag.id}
-                                                href={`/conversations?tagId=${tag.id}`}
-                                                className={cn(
-                                                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
-                                                    activeTagId === tag.id
-                                                        ? 'bg-primary/10 text-primary font-medium'
-                                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                                )}
-                                            >
-                                                <span
-                                                    className="h-2 w-2 shrink-0 rounded-full"
-                                                    style={{ backgroundColor: tag.color }}
-                                                />
-                                                <span className="flex-1 truncate">{tag.name}</span>
-                                            </Link>
-                                        )
-                                    })}
-                                </>
-                            )}
-                        </NavItemCollapsible>
-                        )}
-
-                        {/* Canais */}
-                        {permissions?.permissions.canManageChannels !== false && (
-                            <NavItem
-                                href="/channels"
-                                icon={Hash}
-                                label="Canais"
-                                active={pathname.startsWith('/channels')}
-                                expanded={expanded}
-                            />
-                        )}
-
-                        {/* Copiloto — visível apenas em desenvolvimento local */}
-                        {process.env.NODE_ENV === 'development' && (
-                        <NavItemCollapsible
-                            href="/copilot"
-                            icon={Bot}
-                            label="Capitão / Copiloto"
-                            active={pathname.startsWith('/copilot')}
-                            expanded={expanded}
-                        >
-                            <Link
-                                href="/copilot"
-                                className={cn(
-                                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
-                                    pathname === '/copilot'
-                                        ? 'bg-primary/10 text-primary font-medium'
-                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                )}
-                            >
-                                <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                                <span className="flex-1 truncate">Agentes</span>
-                            </Link>
-                            <Link
-                                href="/copilot/rules"
-                                className={cn(
-                                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
-                                    pathname.startsWith('/copilot/rules')
-                                        ? 'bg-primary/10 text-primary font-medium'
-                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                )}
-                            >
-                                <Zap className="h-3.5 w-3.5 shrink-0" />
-                                <span className="flex-1 truncate">Regras</span>
-                            </Link>
-                        </NavItemCollapsible>
-                        )}
-
-                        {/* Contatos */}
-                        {permissions?.permissions.canManageContacts !== false && (
-                            <NavItem
-                                href="/contacts"
-                                icon={Users}
-                                label="Contatos"
-                                active={pathname.startsWith('/contacts')}
-                                expanded={expanded}
-                            />
-                        )}
-
-                        {/* Kanban */}
-                        {permissions?.permissions.canViewConversations !== false && (
-                            <NavItem
-                                href="/kanban"
-                                icon={Kanban}
-                                label="Kanban"
-                                active={pathname.startsWith('/kanban')}
-                                expanded={expanded}
-                            />
-                        )}
-
-                        {/* Campanhas */}
-                        {permissions?.permissions.canManageCampaigns !== false && (
-                            <NavItem
-                                href="/campaigns"
-                                icon={Megaphone}
-                                label="Campanhas"
-                                active={pathname.startsWith('/campaigns')}
-                                expanded={expanded}
-                            />
-                        )}
-
-                        {/* Central de Ajuda */}
-                        <NavItem
-                            href="/help-center"
-                            icon={BookOpen}
-                            label="Central de Ajuda"
-                            active={pathname.startsWith('/help-center')}
-                            expanded={expanded}
-                        />
-
-                        {/* Changelog / Logs */}
-                        <NavItem
-                            href="/logs"
-                            icon={ListTodo}
-                            label="Changelog"
-                            active={pathname.startsWith('/logs')}
-                            expanded={expanded}
-                        />
-
-                        {/* Teste do Widget */}
-                        <NavItem
-                            href="/test"
-                            icon={FlaskConical}
-                            label="Teste do Widget"
-                            active={pathname.startsWith('/test')}
-                            expanded={expanded}
-                        />
-                    </nav>
-
-                    {/* Bottom */}
-                    <div className={cn(
-                        'flex flex-col gap-0.5 pt-2',
-                        expanded ? 'items-stretch' : 'items-center'
-                    )}>
-                        <div className={cn('h-px bg-border mb-2', expanded ? 'mx-1' : 'w-8')} />
-
-                        {(permissions === null || permissions.permissions.canManageSettings || permissions.permissions.canManageMembers || permissions.permissions.canManageTags) && (
-                            <NavItem
-                                href="/settings"
-                                icon={Settings}
-                                label="Configurações"
-                                active={pathname.startsWith('/settings')}
-                                expanded={expanded}
-                            />
-                        )}
-
-                        {/* User avatar */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Link
-                                    href="/account"
-                                    className={cn(
-                                        'mt-1 flex items-center gap-2 rounded-lg p-1.5 ring-2 ring-transparent hover:ring-primary transition-all',
-                                        expanded ? 'w-full' : '',
-                                        pathname.startsWith('/account') && 'ring-primary'
-                                    )}
-                                >
-                                    <Avatar className="h-7 w-7 shrink-0">
-                                        {userImage && <AvatarImage src={userImage} alt={userName} />}
-                                        <AvatarFallback className="bg-muted text-muted-foreground text-xs">
-                                            {userName ? userName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() : '?'}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    {expanded && (
-                                        <span className="truncate text-sm font-medium text-foreground">
-                                            {userName || 'Minha conta'}
-                                        </span>
-                                    )}
-                                </Link>
-                            </TooltipTrigger>
-                            {!expanded && (
-                                <TooltipContent side="right">Minha conta</TooltipContent>
-                            )}
-                        </Tooltip>
-                    </div>
-                </aside>
+                <SidebarContent
+                    expanded={expanded}
+                    setExpanded={setExpanded}
+                    pathname={pathname}
+                    activeChannelId={activeChannelId ?? null}
+                    orgId={orgId}
+                    orgName={orgName}
+                    orgLogo={orgLogo}
+                    orgLogoBg={orgLogoBg}
+                    orgLogoFit={orgLogoFit}
+                    permissions={permissions}
+                    sidebarChannels={sidebarChannels}
+                    sidebarTags={sidebarTags}
+                    userName={userName}
+                    userImage={userImage}
+                    userId={userId}
+                />
 
                 {/* ── Page content ── */}
                 <PermissionsContext.Provider value={{ data: permissions, loading: permissionsLoading }}>
