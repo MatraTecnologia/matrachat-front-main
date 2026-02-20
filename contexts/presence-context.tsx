@@ -162,7 +162,7 @@ export function PresenceProvider({
     function stopHeartbeat() {
         if (heartbeatIntervalRef.current) {
             clearInterval(heartbeatIntervalRef.current)
-            heartbeatIntervalRef.current = undefined
+            heartbeatIntervalRef.current = null
             console.log('💔 Heartbeat parado')
         }
     }
