@@ -977,6 +977,11 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [mediaCaption, setMediaCaption] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    // Estados para modal de auto-atribuição
+    const [autoAssignModal, setAutoAssignModal] = useState(false)
+    const [dontAskAgain, setDontAskAgain] = useState(false)
+    const messageCountRef = useRef<number>(0)
+
     useEffect(() => {
         api.get('/tags')
             .then(({ data }) => setAllTags(data))
@@ -1004,6 +1009,9 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         setLoadingMsgs(true)
         setHasMore(false)
         oldestDateRef.current = null
+
+        // Reset contador de mensagens ao trocar de contato
+        messageCountRef.current = 0
 
         api.get('/messages', { params: { contactId: contact.id, limit: 50 } })
             .then(({ data }) => {
@@ -1274,11 +1282,69 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 status: 'sent',
                 externalId: externalId,
             })
+
+            // Verifica se deve mostrar modal de auto-atribuição
+            checkAutoAssign()
         } catch {
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
         } finally {
             setSending(false)
         }
+    }
+
+    // Função para verificar se deve mostrar modal de auto-atribuição
+    function checkAutoAssign() {
+        // Só mostra se não houver agente atribuído
+        if (contact.assignedToId) return
+
+        // Incrementa contador de mensagens
+        messageCountRef.current += 1
+
+        // Verifica se o usuário já marcou para não perguntar mais para este contato
+        const dontAskKey = `autoAssign_dontAsk_${contact.id}`
+        const dontAsk = localStorage.getItem(dontAskKey) === 'true'
+
+        if (dontAsk) return
+
+        // Mostra modal na primeira mensagem ou a cada 10 mensagens
+        const shouldShow = messageCountRef.current === 1 || messageCountRef.current % 10 === 0
+
+        if (shouldShow) {
+            setAutoAssignModal(true)
+        }
+    }
+
+    // Atribuir conversa a mim mesmo
+    async function handleAutoAssign() {
+        if (dontAskAgain) {
+            const dontAskKey = `autoAssign_dontAsk_${contact.id}`
+            localStorage.setItem(dontAskKey, 'true')
+        }
+
+        setAutoAssignModal(false)
+        setDontAskAgain(false)
+
+        // Busca o ID do usuário atual
+        try {
+            const { data: userData } = await api.get('/agent/members')
+            if (userData && userData.length > 0) {
+                const currentUserId = userData[0].user.id
+                await handleAssign(currentUserId)
+            }
+        } catch {
+            toast.error('Erro ao atribuir conversa.')
+        }
+    }
+
+    // Não atribuir agora
+    function handleDismissAutoAssign() {
+        if (dontAskAgain) {
+            const dontAskKey = `autoAssign_dontAsk_${contact.id}`
+            localStorage.setItem(dontAskKey, 'true')
+        }
+
+        setAutoAssignModal(false)
+        setDontAskAgain(false)
     }
 
     const currentAssignee = contact.assignedTo
@@ -1714,6 +1780,63 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 open={contactModalOpen}
                 onClose={() => setContactModalOpen(false)}
             />
+
+            {/* Modal de auto-atribuição */}
+            <Dialog open={autoAssignModal} onOpenChange={(v) => !v && handleDismissAutoAssign()}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <UserPlus className="h-5 w-5 text-blue-600" />
+                            Atribuir Conversa
+                        </DialogTitle>
+                        <DialogDescription>
+                            Esta conversa ainda não possui um agente atribuído.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4 space-y-3">
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                            <p className="text-sm text-blue-800">
+                                💡 <strong>Dica:</strong> Atribuir a conversa ajuda a organizar o atendimento e garante que você receberá notificações sobre novas mensagens.
+                            </p>
+                        </div>
+
+                        <p className="text-sm text-muted-foreground">
+                            Você está respondendo esta conversa. Deseja atribuí-la a você mesmo?
+                        </p>
+
+                        <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3">
+                            <input
+                                type="checkbox"
+                                id="dontAskAgain"
+                                checked={dontAskAgain}
+                                onChange={(e) => setDontAskAgain(e.target.checked)}
+                                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                            <label htmlFor="dontAskAgain" className="text-sm text-muted-foreground cursor-pointer">
+                                Não perguntar novamente para este contato
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={handleDismissAutoAssign}
+                        >
+                            Não Agora
+                        </Button>
+                        <Button
+                            className="flex-1"
+                            onClick={handleAutoAssign}
+                        >
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            Atribuir a Mim
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
