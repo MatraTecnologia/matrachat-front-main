@@ -2178,7 +2178,7 @@ function AppearanceTab({ org, onSaved }: { org: Org; onSaved: (updated: Org) => 
 // ─── Aba: Perfil ───────────────────────────────────────────────────────────────
 
 function ProfileTab() {
-    const [user, setUser] = useState<{ id: string; name: string; email: string; signature?: string | null } | null>(null)
+    const [user, setUser] = useState<{ id: string; name: string; email: string; signature?: string | null; signaturePosition?: string } | null>(null)
     const [notifications, setNotifications] = useState<{
         notifyNewMessage: boolean
         notifyAssigned: boolean
@@ -2187,6 +2187,7 @@ function ProfileTab() {
     } | null>(null)
     const [loading, setLoading] = useState(true)
     const [signature, setSignature] = useState('')
+    const [signaturePosition, setSignaturePosition] = useState<'pre' | 'post'>('post')
     const [savingSignature, setSavingSignature] = useState(false)
     const [savingNotifications, setSavingNotifications] = useState(false)
 
@@ -2198,6 +2199,7 @@ function ProfileTab() {
         ]).then(([userRes, notifRes]) => {
             setUser(userRes.data)
             setSignature(userRes.data.signature || '')
+            setSignaturePosition(userRes.data.signaturePosition || 'post')
             setNotifications(notifRes.data)
         }).catch(() => {
             toast.error('Erro ao carregar configurações.')
@@ -2211,7 +2213,7 @@ function ProfileTab() {
     async function handleSaveSignature() {
         setSavingSignature(true)
         try {
-            await api.patch('/users/me/signature', { signature })
+            await api.patch('/users/me/signature', { signature, signaturePosition })
             toast.success('Assinatura atualizada.')
         } catch {
             toast.error('Erro ao salvar assinatura.')
@@ -2275,6 +2277,32 @@ function ProfileTab() {
                             </p>
                         </div>
                     )}
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="signaturePosition">Posição da Assinatura</Label>
+                    <Select value={signaturePosition} onValueChange={(value: 'pre' | 'post') => setSignaturePosition(value)}>
+                        <SelectTrigger id="signaturePosition">
+                            <SelectValue placeholder="Selecione a posição" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="post">
+                                <div className="flex flex-col items-start">
+                                    <span className="font-medium">Depois da mensagem (Padrão)</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        A assinatura aparece após o conteúdo
+                                    </span>
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="pre">
+                                <div className="flex flex-col items-start">
+                                    <span className="font-medium">Antes da mensagem</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        A assinatura aparece antes do conteúdo
+                                    </span>
+                                </div>
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 <Button onClick={handleSaveSignature} disabled={savingSignature}>
                     {savingSignature && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
