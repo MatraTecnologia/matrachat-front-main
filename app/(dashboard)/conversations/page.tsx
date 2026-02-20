@@ -36,6 +36,7 @@ import { NoPermission } from '@/components/no-permission'
 import { useAgentSse, type SseNewMessage, type SseConvUpdated, type SseUserViewing, type SseUserLeft, type SseUserTyping } from '@/hooks/useAgentSse'
 import { toast } from 'sonner'
 import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
+import { usePresenceContext } from '@/contexts/presence-context'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -1036,6 +1037,9 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [mediaCaption, setMediaCaption] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    // Hook de presença para notificar via WebSocket
+    const { setViewing } = usePresenceContext()
+
     // Estados para modal de auto-atribuição
     const [autoAssignModal, setAutoAssignModal] = useState(false)
     const [dontAskAgain, setDontAskAgain] = useState(false)
@@ -1139,8 +1143,9 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
 
     // Tracking de presença - envia evento quando entra/sai da conversa
     useEffect(() => {
-        // Envia evento de "viewing" ao entrar na conversa
+        // Envia evento de "viewing" ao entrar na conversa (HTTP + WebSocket)
         api.post('/agent/presence/viewing', { contactId: contact.id }).catch(() => null)
+        setViewing(contact.id) // WebSocket real-time
 
         // Inicia contador de tempo de visualização
         if (viewDurationInterval.current) {
@@ -1152,9 +1157,10 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             )
         }, 1000)
 
-        // Cleanup: envia evento de "left" ao sair da conversa
+        // Cleanup: envia evento de "left" ao sair da conversa (HTTP + WebSocket)
         return () => {
             api.post('/agent/presence/left', { contactId: contact.id }).catch(() => null)
+            setViewing(null) // Limpa presença WebSocket
             if (viewDurationInterval.current) {
                 clearInterval(viewDurationInterval.current)
             }

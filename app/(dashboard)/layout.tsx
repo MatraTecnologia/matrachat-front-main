@@ -27,6 +27,7 @@ import {
     Zap,
     Kanban,
     ListTodo,
+    Monitor,
 
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -347,6 +348,17 @@ function SidebarContent({
                         icon={BarChart2}
                         label="Relatórios"
                         active={pathname.startsWith('/dashboard')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* Supervisão - Apenas Admin/Owner */}
+                {(permissions?.role === 'admin' || permissions?.role === 'owner') && (
+                    <NavItem
+                        href="/supervisao"
+                        icon={Monitor}
+                        label="Supervisão"
+                        active={pathname.startsWith('/supervisao')}
                         expanded={expanded}
                     />
                 )}
