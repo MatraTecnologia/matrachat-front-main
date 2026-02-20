@@ -35,6 +35,7 @@ import { usePermissions } from '@/contexts/permissions-context'
 import { NoPermission } from '@/components/no-permission'
 import { useAgentSse, type SseNewMessage, type SseConvUpdated, type SseUserViewing, type SseUserLeft, type SseUserTyping } from '@/hooks/useAgentSse'
 import { toast } from 'sonner'
+import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -2359,6 +2360,13 @@ function ConversationsPageInner() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Painel de usuários online */}
+            <OnlineUsersPanel
+                orgId={orgId}
+                currentUserId={userId}
+                contacts={contacts}
+            />
         </>
     )
 }
