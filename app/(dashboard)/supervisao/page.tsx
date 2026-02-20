@@ -33,7 +33,7 @@ type AgentView = UserPresence & {
 }
 
 export default function SupervisaoPage() {
-    const { data: perms, isLoading: permsLoading } = usePermissions()
+    const { data: perms, loading: permsLoading } = usePermissions()
     const { onlineUsers, isConnected } = usePresenceContext()
     const [contacts, setContacts] = useState<Map<string, Contact>>(new Map())
     const [agentViews, setAgentViews] = useState<AgentView[]>([])
