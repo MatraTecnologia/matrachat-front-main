@@ -515,7 +515,7 @@ export default function KanbanPage() {
     const boardMinPx = colCount * 270 + (colCount - 1) * 20 + 48 + 16
 
     return (
-        <div className="flex flex-col h-full bg-background">
+        <div className="flex flex-col h-full bg-background min-w-[calc(100vw-256px)]">
             {/* ── Header ── */}
             <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
                 <div className="flex items-center gap-3">
