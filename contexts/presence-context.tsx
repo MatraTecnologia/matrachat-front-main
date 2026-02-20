@@ -21,6 +21,13 @@ export type UserPresence = {
     currentRoute: string | null
     lastActivity: Date
     connectedAt: Date
+    // Estado da tela para supervisão
+    screenState?: {
+        messages?: any[]
+        inputText?: string
+        scrollPosition?: number
+        lastAction?: string
+    }
 }
 
 export type PresenceEvent =
@@ -30,6 +37,11 @@ export type PresenceEvent =
     | { type: 'user_active'; userId: string; organizationId: string }
     | { type: 'user_viewing'; userId: string; contactId: string; organizationId: string }
     | { type: 'user_typing'; userId: string; contactId: string; isTyping: boolean; organizationId: string }
+    // Eventos de supervisão
+    | { type: 'screen_update'; userId: string; contactId: string; messages: any[]; organizationId: string }
+    | { type: 'input_update'; userId: string; contactId: string; text: string; organizationId: string }
+    | { type: 'scroll_update'; userId: string; contactId: string; position: number; organizationId: string }
+    | { type: 'action_performed'; userId: string; contactId: string; action: string; organizationId: string }
 
 type PresenceContextValue = {
     isConnected: boolean
@@ -37,6 +49,11 @@ type PresenceContextValue = {
     setViewing: (contactId: string | null) => void
     setTyping: (contactId: string, isTyping: boolean) => void
     setStatus: (status: 'online' | 'away') => void
+    // Funções de supervisão
+    updateScreen: (contactId: string, messages: any[]) => void
+    updateInput: (contactId: string, text: string) => void
+    updateScroll: (contactId: string, position: number) => void
+    sendAction: (contactId: string, action: string) => void
 }
 
 const PresenceContext = createContext<PresenceContextValue | null>(null)
@@ -299,6 +316,55 @@ export function PresenceProvider({
                     u.userId === event.userId ? { ...u, currentContactId: event.contactId } : u
                 ))
                 break
+
+            // Eventos de supervisão
+            case 'screen_update':
+                setOnlineUsers(prev => prev.map(u =>
+                    u.userId === event.userId ? {
+                        ...u,
+                        screenState: {
+                            ...u.screenState,
+                            messages: event.messages
+                        }
+                    } : u
+                ))
+                break
+
+            case 'input_update':
+                setOnlineUsers(prev => prev.map(u =>
+                    u.userId === event.userId ? {
+                        ...u,
+                        screenState: {
+                            ...u.screenState,
+                            inputText: event.text
+                        }
+                    } : u
+                ))
+                break
+
+            case 'scroll_update':
+                setOnlineUsers(prev => prev.map(u =>
+                    u.userId === event.userId ? {
+                        ...u,
+                        screenState: {
+                            ...u.screenState,
+                            scrollPosition: event.position
+                        }
+                    } : u
+                ))
+                break
+
+            case 'action_performed':
+                setOnlineUsers(prev => prev.map(u =>
+                    u.userId === event.userId ? {
+                        ...u,
+                        screenState: {
+                            ...u.screenState,
+                            lastAction: event.action
+                        }
+                    } : u
+                ))
+                break
         }
     }
 
@@ -318,12 +384,36 @@ export function PresenceProvider({
         socketRef.current?.emit('status', { status })
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Funções de Supervisão - Transmitir Estado da Tela
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function updateScreen(contactId: string, messages: any[]) {
+        socketRef.current?.emit('screen_update', { contactId, messages })
+    }
+
+    function updateInput(contactId: string, text: string) {
+        socketRef.current?.emit('input_update', { contactId, text })
+    }
+
+    function updateScroll(contactId: string, position: number) {
+        socketRef.current?.emit('scroll_update', { contactId, position })
+    }
+
+    function sendAction(contactId: string, action: string) {
+        socketRef.current?.emit('action_performed', { contactId, action })
+    }
+
     const value: PresenceContextValue = {
         isConnected,
         onlineUsers,
         setViewing,
         setTyping,
         setStatus,
+        updateScreen,
+        updateInput,
+        updateScroll,
+        sendAction,
     }
 
     return (

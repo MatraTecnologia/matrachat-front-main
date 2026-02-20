@@ -1037,8 +1037,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [mediaCaption, setMediaCaption] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
-    // Hook de presença para notificar via WebSocket
-    const { setViewing } = usePresenceContext()
+    // Hook de presença para notificar via WebSocket e supervisão
+    const { setViewing, updateScreen, updateInput, sendAction } = usePresenceContext()
 
     // Estados para modal de auto-atribuição
     const [autoAssignModal, setAutoAssignModal] = useState(false)
@@ -1190,6 +1190,24 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             api.post('/agent/presence/typing', { contactId: contact.id, isTyping: false }).catch(() => null)
         }
     }, [contact.id, reply])
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Supervisão - Transmitir estado da tela em tempo real
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Transmite mensagens visualizadas para supervisão
+    useEffect(() => {
+        if (messages.length > 0 && contact.id) {
+            updateScreen(contact.id, messages)
+        }
+    }, [messages, contact.id])
+
+    // Transmite texto sendo digitado em tempo real para supervisão
+    useEffect(() => {
+        if (contact.id && reply) {
+            updateInput(contact.id, reply)
+        }
+    }, [reply, contact.id])
 
     async function handleLoadMore() {
         if (!oldestDateRef.current || loadingMore) return
@@ -1447,6 +1465,9 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 status: 'sent',
                 externalId: externalId,
             })
+
+            // Notifica supervisão sobre a ação
+            sendAction(contact.id, `Enviou mensagem: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`)
 
             // Verifica se deve mostrar modal de auto-atribuição
             checkAutoAssign()
