@@ -65,8 +65,8 @@ export function PresenceProvider({
     const [onlineUsers, setOnlineUsers] = useState<UserPresence[]>([])
 
     const pathname = usePathname()
-    const heartbeatIntervalRef = useRef<NodeJS.Timeout>()
-    const idleTimeoutRef = useRef<NodeJS.Timeout>()
+    const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null)
+    const idleTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const lastActivityRef = useRef<Date>(new Date())
 
     // ═══════════════════════════════════════════════════════════════════════════
