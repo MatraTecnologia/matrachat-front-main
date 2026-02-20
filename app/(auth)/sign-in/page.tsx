@@ -13,6 +13,7 @@ import {
     FieldLabel,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
 
 type Status = 'loading' | 'no-org' | 'ready'
 type AuthMethod = 'password' | 'magic-link' | 'otp'
@@ -36,6 +37,7 @@ function SignInPageInner() {
     const [authMethod, setAuthMethod] = useState<AuthMethod>('password')
     const [otpStep, setOtpStep] = useState<OtpStep>('email')
     const [otpEmail, setOtpEmail] = useState('')
+    const [otpValue, setOtpValue] = useState('')
     const [submitting, setSubmitting] = useState(false)
     const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
 
@@ -161,16 +163,21 @@ function SignInPageInner() {
     // ── OTP: verificar código ─────────────────────────────────────────────────
     async function handleVerifyOtp(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
-        const otp = (e.currentTarget.elements.namedItem('otp') as HTMLInputElement).value
+
+        if (otpValue.length !== 6) {
+            toast.error('Digite o código completo de 6 dígitos.')
+            return
+        }
 
         setSubmitting(true)
         try {
-            await api.post('/auth/sign-in/email-otp', { email: otpEmail, otp })
+            await api.post('/auth/sign-in/email-otp', { email: otpEmail, otp: otpValue })
             await joinOrgAfterLogin()
             toast.success('Login realizado com sucesso!')
             window.location.href = redirectTo
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Código inválido ou expirado.')
+            setOtpValue('') // Limpa o código em caso de erro
         } finally {
             setSubmitting(false)
         }
@@ -351,22 +358,30 @@ function SignInPageInner() {
                                                 <FieldGroup>
                                                     <Field>
                                                         <FieldLabel htmlFor="otp">Código de verificação</FieldLabel>
-                                                        <Input
-                                                            id="otp"
-                                                            type="text"
-                                                            inputMode="numeric"
-                                                            pattern="[0-9]{6}"
-                                                            maxLength={6}
-                                                            placeholder="000000"
-                                                            className="text-center text-2xl tracking-widest"
-                                                            required
-                                                        />
-                                                        <FieldDescription className="text-xs">
+                                                        <div className="flex justify-center">
+                                                            <InputOTP
+                                                                id="otp"
+                                                                maxLength={6}
+                                                                value={otpValue}
+                                                                onChange={(value) => setOtpValue(value)}
+                                                                disabled={submitting}
+                                                            >
+                                                                <InputOTPGroup>
+                                                                    <InputOTPSlot index={0} />
+                                                                    <InputOTPSlot index={1} />
+                                                                    <InputOTPSlot index={2} />
+                                                                    <InputOTPSlot index={3} />
+                                                                    <InputOTPSlot index={4} />
+                                                                    <InputOTPSlot index={5} />
+                                                                </InputOTPGroup>
+                                                            </InputOTP>
+                                                        </div>
+                                                        <FieldDescription className="text-xs text-center">
                                                             Código enviado para <strong>{otpEmail}</strong>
                                                         </FieldDescription>
                                                     </Field>
                                                     <Field>
-                                                        <Button type="submit" disabled={submitting}>
+                                                        <Button type="submit" disabled={submitting || otpValue.length !== 6}>
                                                             {submitting ? 'Verificando...' : 'Verificar código'}
                                                         </Button>
                                                     </Field>
@@ -374,7 +389,10 @@ function SignInPageInner() {
                                                         <button
                                                             type="button"
                                                             className="underline text-sm"
-                                                            onClick={() => setOtpStep('email')}
+                                                            onClick={() => {
+                                                                setOtpStep('email')
+                                                                setOtpValue('')
+                                                            }}
                                                         >
                                                             Usar outro e-mail
                                                         </button>
