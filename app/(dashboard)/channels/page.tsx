@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ChannelType = 'api' | 'whatsapp'
+type ChannelType = 'api' | 'whatsapp' | 'whatsapp-business'
 type ChannelStatus = 'pending' | 'connecting' | 'connected' | 'disconnected'
 
 type FormField = {
@@ -64,7 +64,7 @@ type Channel = {
     }
 }
 
-type WizardStep = 'pick-type' | 'api-form' | 'whatsapp-form' | 'whatsapp-qr' | 'done'
+type WizardStep = 'pick-type' | 'api-form' | 'whatsapp-form' | 'whatsapp-business-form' | 'whatsapp-qr' | 'done'
 
 // ─── Hook: orgId da sessão ─────────────────────────────────────────────────────
 
@@ -101,11 +101,14 @@ function statusBadge(status: ChannelStatus) {
 
 function typeIcon(type: ChannelType) {
     if (type === 'whatsapp') return <MessageCircle className="h-5 w-5 text-green-600" />
+    if (type === 'whatsapp-business') return <MessageCircle className="h-5 w-5 text-blue-600" />
     return <Globe className="h-5 w-5 text-blue-600" />
 }
 
 function typeLabel(type: ChannelType) {
-    return type === 'whatsapp' ? 'WhatsApp' : 'API Externa'
+    if (type === 'whatsapp') return 'WhatsApp (Evolution)'
+    if (type === 'whatsapp-business') return 'WhatsApp Business API'
+    return 'API Externa'
 }
 
 // ─── Copied helper ────────────────────────────────────────────────────────────
@@ -685,6 +688,14 @@ function AddChannelDialog({
     const [waLoading, setWaLoading] = useState(false)
     const [hasDefaultKey, setHasDefaultKey] = useState(false)
 
+    // WhatsApp Business form
+    const [wabName, setWabName] = useState('')
+    const [wabPhoneNumberId, setWabPhoneNumberId] = useState('')
+    const [wabAccessToken, setWabAccessToken] = useState('')
+    const [wabWebhookVerifyToken, setWabWebhookVerifyToken] = useState('')
+    const [wabBusinessAccountId, setWabBusinessAccountId] = useState('')
+    const [wabLoading, setWabLoading] = useState(false)
+
     // Pré-preenche URL e key com os defaults do servidor (env vars)
     useEffect(() => {
         api.get('/channels/evolution-defaults')
@@ -705,6 +716,7 @@ function AddChannelDialog({
     function reset() {
         setStep('pick-type')
         setApiName(''); setWaName(''); setWaUrl(''); setWaKey('')
+        setWabName(''); setWabPhoneNumberId(''); setWabAccessToken(''); setWabWebhookVerifyToken(''); setWabBusinessAccountId('')
         setQrBase64(null); setConnected(false)
         if (pollInterval) clearInterval(pollInterval)
         setPollInterval(null)
@@ -751,6 +763,31 @@ function AddChannelDialog({
             toast.error('Erro ao criar canal. Verifique a URL e API key da Evolution API.')
         } finally {
             setWaLoading(false)
+        }
+    }
+
+    // ── WhatsApp Business channel ────────────────────────────────────────────
+    async function createWhatsAppBusinessChannel() {
+        if (!wabName.trim() || !wabPhoneNumberId.trim() || !wabAccessToken.trim() || !wabWebhookVerifyToken.trim()) {
+            toast.error('Preencha todos os campos obrigatórios.')
+            return
+        }
+        setWabLoading(true)
+        try {
+            const { data } = await api.post('/channels', {
+                name: wabName.trim(),
+                type: 'whatsapp-business',
+                phoneNumberId: wabPhoneNumberId.trim(),
+                accessToken: wabAccessToken.trim(),
+                webhookVerifyToken: wabWebhookVerifyToken.trim(),
+                businessAccountId: wabBusinessAccountId.trim() || undefined,
+            })
+            onCreated(data)
+            setStep('done')
+        } catch {
+            toast.error('Erro ao criar canal. Verifique as credenciais do Meta.')
+        } finally {
+            setWabLoading(false)
         }
     }
 
@@ -808,12 +845,12 @@ function AddChannelDialog({
                             <DialogTitle>Adicionar canal</DialogTitle>
                             <DialogDescription>Escolha como deseja conectar um novo canal de atendimento.</DialogDescription>
                         </DialogHeader>
-                        <div className="grid grid-cols-2 gap-3 mt-2">
+                        <div className="grid grid-cols-1 gap-3 mt-2">
                             <button
                                 onClick={() => setStep('api-form')}
-                                className="flex flex-col items-center gap-3 rounded-xl border-2 p-5 transition-colors hover:border-primary hover:bg-primary/5 text-left"
+                                className="flex items-center gap-4 rounded-xl border-2 p-4 transition-colors hover:border-primary hover:bg-primary/5 text-left"
                             >
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100">
                                     <Globe className="h-6 w-6 text-blue-600" />
                                 </div>
                                 <div>
@@ -826,15 +863,30 @@ function AddChannelDialog({
 
                             <button
                                 onClick={() => setStep('whatsapp-form')}
-                                className="flex flex-col items-center gap-3 rounded-xl border-2 p-5 transition-colors hover:border-primary hover:bg-primary/5 text-left"
+                                className="flex items-center gap-4 rounded-xl border-2 p-4 transition-colors hover:border-primary hover:bg-primary/5 text-left"
                             >
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-100">
                                     <MessageCircle className="h-6 w-6 text-green-600" />
                                 </div>
                                 <div>
-                                    <p className="font-semibold text-sm">WhatsApp</p>
+                                    <p className="font-semibold text-sm">WhatsApp (Evolution API)</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                        Conecte via Evolution API com QR code
+                                        Conecte via Evolution API com QR code (não-oficial)
+                                    </p>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => setStep('whatsapp-business-form')}
+                                className="flex items-center gap-4 rounded-xl border-2 p-4 transition-colors hover:border-primary hover:bg-primary/5 text-left"
+                            >
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100">
+                                    <MessageCircle className="h-6 w-6 text-blue-600" />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-sm">WhatsApp Business API</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        API oficial do Meta/Facebook (sem QR code)
                                     </p>
                                 </div>
                             </button>
@@ -881,7 +933,7 @@ function AddChannelDialog({
                     <>
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2">
-                                <MessageCircle className="h-5 w-5 text-green-600" /> WhatsApp
+                                <MessageCircle className="h-5 w-5 text-green-600" /> WhatsApp (Evolution)
                             </DialogTitle>
                             <DialogDescription>
                                 Informe os dados da sua instância Evolution API.
@@ -921,6 +973,93 @@ function AddChannelDialog({
                             <Button className="flex-1" onClick={createWhatsAppChannel} disabled={waLoading}>
                                 {waLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 Conectar
+                            </Button>
+                        </div>
+                    </>
+                )}
+
+                {/* WhatsApp Business form */}
+                {step === 'whatsapp-business-form' && (
+                    <>
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <MessageCircle className="h-5 w-5 text-blue-600" /> WhatsApp Business API
+                            </DialogTitle>
+                            <DialogDescription>
+                                Configure sua conexão com a API oficial do Meta. <a href="/WHATSAPP_BUSINESS_SETUP.md" target="_blank" className="underline">Ver guia completo</a>
+                            </DialogDescription>
+                        </DialogHeader>
+                        <ScrollArea className="max-h-[400px] pr-4">
+                            <div className="space-y-3 mt-2">
+                                <div className="space-y-1.5">
+                                    <Label>Nome do canal *</Label>
+                                    <Input
+                                        placeholder="ex: WhatsApp Business - Empresa"
+                                        value={wabName}
+                                        onChange={(e) => setWabName(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Phone Number ID *</Label>
+                                    <Input
+                                        placeholder="123456789012345"
+                                        value={wabPhoneNumberId}
+                                        onChange={(e) => setWabPhoneNumberId(e.target.value)}
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Encontre em: WhatsApp → Introdução no Meta for Developers
+                                    </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Access Token (Permanente) *</Label>
+                                    <Input
+                                        placeholder="EAABsbCS1iHgBO7ZCcxK2kZBR..."
+                                        type="password"
+                                        value={wabAccessToken}
+                                        onChange={(e) => setWabAccessToken(e.target.value)}
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Gere um System User Token com permissões de WhatsApp
+                                    </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Webhook Verify Token *</Label>
+                                    <Input
+                                        placeholder="seu_token_secreto_123"
+                                        type="password"
+                                        value={wabWebhookVerifyToken}
+                                        onChange={(e) => setWabWebhookVerifyToken(e.target.value)}
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Crie um token secreto para verificação do webhook
+                                    </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Business Account ID (opcional)</Label>
+                                    <Input
+                                        placeholder="102851234567890"
+                                        value={wabBusinessAccountId}
+                                        onChange={(e) => setWabBusinessAccountId(e.target.value)}
+                                    />
+                                </div>
+                                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 space-y-2">
+                                    <p className="text-xs font-medium text-blue-900">📋 Configurar Webhook no Meta:</p>
+                                    <p className="text-[11px] text-blue-800">
+                                        URL: <code className="bg-white px-1 rounded">{API_URL}/channels/whatsapp-business/webhook</code>
+                                    </p>
+                                    <p className="text-[11px] text-blue-800">
+                                        Campos: <code className="bg-white px-1 rounded">messages</code>
+                                    </p>
+                                </div>
+                            </div>
+                        </ScrollArea>
+                        <div className="flex gap-2 mt-4">
+                            <Button variant="outline" className="flex-1" onClick={() => setStep('pick-type')}>
+                                Voltar
+                            </Button>
+                            <Button className="flex-1" onClick={createWhatsAppBusinessChannel} disabled={wabLoading}>
+                                {wabLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Criar canal
                             </Button>
                         </div>
                     </>
