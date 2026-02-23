@@ -23,9 +23,9 @@ export default function ForgotPasswordPage() {
 
         setSubmitting(true)
         try {
-            // Better Auth: POST /auth/forget-password
+            // Better Auth: POST /auth/request-password-reset
             // redirectTo: URL base para onde o link de reset vai apontar
-            const response = await api.post('/auth/forget-password', {
+            const response = await api.post('/auth/request-password-reset', {
                 email,
                 redirectTo: `${window.location.origin}/reset-password`,
             })

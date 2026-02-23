@@ -1446,6 +1446,14 @@ function DeleteChannelDialog({
     onConfirm: () => void
 }) {
     const [deleting, setDeleting] = useState(false)
+    const [confirmText, setConfirmText] = useState('')
+
+    // Reseta o input quando o dialog abre/fecha
+    useEffect(() => {
+        if (!open) {
+            setConfirmText('')
+        }
+    }, [open])
 
     async function handleConfirm() {
         setDeleting(true)
@@ -1464,6 +1472,9 @@ function DeleteChannelDialog({
         return channel.name
     }
 
+    const instanceName = getInstanceName()
+    const isConfirmValid = confirmText === instanceName
+
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
             <DialogContent className="max-w-md">
@@ -1481,7 +1492,7 @@ function DeleteChannelDialog({
                     {/* Nome da instância/canal */}
                     <div className="rounded-lg bg-muted p-3">
                         <p className="text-sm font-medium mb-1">Canal a ser removido:</p>
-                        <p className="text-sm font-mono font-semibold text-foreground">{getInstanceName()}</p>
+                        <p className="text-sm font-mono font-semibold text-foreground">{instanceName}</p>
                     </div>
 
                     {/* Aviso sobre dessincronização */}
@@ -1504,9 +1515,30 @@ function DeleteChannelDialog({
                         </div>
                     </div>
 
-                    <p className="text-sm text-muted-foreground">
-                        Tem certeza que deseja remover este canal?
-                    </p>
+                    {/* Input de confirmação */}
+                    <div className="space-y-2">
+                        <Label htmlFor="confirm-input" className="text-sm font-medium">
+                            Para confirmar, digite o nome do canal: <span className="font-mono font-semibold text-destructive">{instanceName}</span>
+                        </Label>
+                        <Input
+                            id="confirm-input"
+                            type="text"
+                            value={confirmText}
+                            onChange={(e) => setConfirmText(e.target.value)}
+                            placeholder={`Digite: ${instanceName}`}
+                            className={cn(
+                                'font-mono',
+                                confirmText && !isConfirmValid && 'border-destructive focus-visible:ring-destructive'
+                            )}
+                            disabled={deleting}
+                            autoComplete="off"
+                        />
+                        {confirmText && !isConfirmValid && (
+                            <p className="text-xs text-destructive">
+                                O nome não corresponde. Digite exatamente: <span className="font-mono font-semibold">{instanceName}</span>
+                            </p>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex gap-2 justify-end">
@@ -1520,7 +1552,7 @@ function DeleteChannelDialog({
                     <Button
                         variant="destructive"
                         onClick={handleConfirm}
-                        disabled={deleting}
+                        disabled={!isConfirmValid || deleting}
                     >
                         {deleting ? (
                             <>

@@ -683,7 +683,7 @@ function ConversationList({
                     .map((t) => (
                         <button key={t} onClick={() => onTabChange(t)}
                             className={cn(
-                                'rounded px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1',
+                                'rounded px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1 whitespace-nowrap',
                                 tab === t ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
                             )}
                         >
