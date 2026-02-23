@@ -1616,6 +1616,20 @@ export default function ChannelsPage() {
         try {
             const { data } = await api.get('/channels')
             setChannels(data)
+
+            // Atualiza status e telefone dos canais WhatsApp
+            const whatsappChannels = data.filter((ch: Channel) => ch.type === 'whatsapp' && ch.status !== 'pending')
+            if (whatsappChannels.length > 0) {
+                // Dispara as verificações de status
+                await Promise.allSettled(
+                    whatsappChannels.map((ch: Channel) =>
+                        api.get(`/channels/${ch.id}/whatsapp/status`)
+                    )
+                )
+                // Recarrega os canais para pegar os telefones atualizados
+                const { data: updatedData } = await api.get('/channels')
+                setChannels(updatedData)
+            }
         } catch {
             toast.error('Erro ao carregar canais.')
         } finally {
@@ -1669,13 +1683,24 @@ export default function ChannelsPage() {
                     <h1 className="text-lg font-semibold">Canais</h1>
                     <p className="text-sm text-muted-foreground">Gerencie suas integrações de atendimento</p>
                 </div>
-                <Button
-                    onClick={() => { setReconnectChannel(undefined); setDialogOpen(true) }}
-                    disabled={!orgId}
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Adicionar canal
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={loadChannels}
+                        disabled={!orgId || loading}
+                        title="Atualizar status e telefones"
+                    >
+                        <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                    </Button>
+                    <Button
+                        onClick={() => { setReconnectChannel(undefined); setDialogOpen(true) }}
+                        disabled={!orgId}
+                    >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Adicionar canal
+                    </Button>
+                </div>
             </div>
 
             {/* Loading / empty state — centralizado na altura disponível */}
