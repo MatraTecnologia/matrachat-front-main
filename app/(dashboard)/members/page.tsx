@@ -188,10 +188,11 @@ function InviteDialog({
 // ─── ChangeRoleDialog ─────────────────────────────────────────────────────────
 
 function ChangeRoleDialog({
-    member, orgId, onClose, onChanged,
+    member, orgId, myRole, onClose, onChanged,
 }: {
     member: Member
     orgId: string
+    myRole: Role | null
     onClose: () => void
     onChanged: () => void
 }) {
@@ -229,14 +230,22 @@ function ChangeRoleDialog({
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="agent">
-                            <div className="flex items-center gap-2">
-                                <UserCog className="h-3.5 w-3.5 text-emerald-600" /> Agente
-                            </div>
-                        </SelectItem>
+                        {/* Apenas owners podem atribuir role owner */}
+                        {myRole === 'owner' && (
+                            <SelectItem value="owner">
+                                <div className="flex items-center gap-2">
+                                    <ShieldAlert className="h-3.5 w-3.5 text-amber-600" /> Owner
+                                </div>
+                            </SelectItem>
+                        )}
                         <SelectItem value="admin">
                             <div className="flex items-center gap-2">
                                 <ShieldCheck className="h-3.5 w-3.5 text-blue-600" /> Administrador
+                            </div>
+                        </SelectItem>
+                        <SelectItem value="agent">
+                            <div className="flex items-center gap-2">
+                                <UserCog className="h-3.5 w-3.5 text-emerald-600" /> Agente
                             </div>
                         </SelectItem>
                         <SelectItem value="member">
@@ -327,8 +336,10 @@ function MemberRow({
 
     const isMe       = member.user.id === currentUserId
     const isOwner    = member.role === 'owner'
-    const canManage  = !isOwner && (myRole === 'owner' || myRole === 'admin')
-    const canPromote = myRole === 'owner'  // somente owner promove para admin
+    // Owners podem gerenciar outros owners (mas não a si mesmos)
+    // Admins podem gerenciar apenas agents e members (não owners)
+    const canManage  = !isMe && ((myRole === 'owner') || (myRole === 'admin' && !isOwner))
+    const canPromote = myRole === 'owner'  // somente owner promove para admin ou owner
 
     async function sendReset() {
         setActioning('reset')
@@ -470,6 +481,7 @@ function MemberRow({
                 <ChangeRoleDialog
                     member={member}
                     orgId={orgId}
+                    myRole={myRole}
                     onClose={() => setDialog(null)}
                     onChanged={onReload}
                 />

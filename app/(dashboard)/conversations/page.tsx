@@ -555,75 +555,88 @@ function ConversationList({
 
     const activeTag = tagFilter ? tags.find((t) => t.id === tagFilter) ?? null : null
 
-    // Quando há busca ativa usa os resultados do backend; caso contrário filtra localmente por status/tab
-    const filtered = search
-        ? (searchResults ?? [])
-        : contacts.filter((c) => {
-            if (channelFilter && c.channelId !== channelFilter) return false
-            const hasUnread = unreadIds.has(c.id)
-            // Se status === 'all', mostra todas as conversas (não filtra por status)
-            if (status !== 'all' && !hasUnread && (c.convStatus ?? 'open') !== status) return false
-            if (tab === 'mine'       && c.assignedToId !== userId) return false
-            if (tab === 'unassigned' && c.assignedToId != null) return false
+    // Função de filtro reutilizável que aplica TODOS os filtros
+    const applyFilters = (c: Contact): boolean => {
+        // Filtro de canal
+        if (channelFilter && c.channelId !== channelFilter) return false
 
-            // Aplicar filtros avançados (condições com operador "E")
-            if (advancedFilterConditions.length > 0) {
-                for (const condition of advancedFilterConditions) {
-                    let passes = false
+        // Filtro de status
+        const hasUnread = unreadIds.has(c.id)
+        if (status !== 'all' && !hasUnread && (c.convStatus ?? 'open') !== status) return false
 
-                    switch (condition.field) {
-                        case 'status':
-                            if (condition.operator === 'equals') {
-                                passes = (c.convStatus ?? 'open') === condition.value
-                            } else if (condition.operator === 'not_equals') {
-                                passes = (c.convStatus ?? 'open') !== condition.value
-                            }
-                            break
+        // Filtro de tab (minhas/não atribuídas/todas)
+        if (tab === 'mine' && c.assignedToId !== userId) return false
+        if (tab === 'unassigned' && c.assignedToId != null) return false
 
-                        case 'assignedTo':
-                            if (condition.operator === 'equals') {
-                                passes = c.assignedToId === condition.value
-                            } else if (condition.operator === 'not_equals') {
-                                passes = c.assignedToId !== condition.value
-                            }
-                            break
+        // Filtro de tag
+        if (tagFilter) {
+            const contactTags = c.tags || []
+            if (!contactTags.some(t => t.tag.id === tagFilter)) return false
+        }
 
-                        case 'tags':
-                            const contactTags = c.tags || []
-                            if (condition.operator === 'equals') {
-                                passes = contactTags.some(t => t.tag.id === condition.value)
-                            } else if (condition.operator === 'not_equals') {
-                                passes = !contactTags.some(t => t.tag.id === condition.value)
-                            } else if (condition.operator === 'contains') {
-                                passes = contactTags.some(t => t.tag.name.toLowerCase().includes(condition.value.toLowerCase()))
-                            }
-                            break
+        // Filtros avançados (condições com operador "E")
+        if (advancedFilterConditions.length > 0) {
+            for (const condition of advancedFilterConditions) {
+                let passes = false
 
-                        case 'channel':
-                            if (condition.operator === 'equals') {
-                                passes = c.channelId === condition.value
-                            } else if (condition.operator === 'not_equals') {
-                                passes = c.channelId !== condition.value
-                            }
-                            break
+                switch (condition.field) {
+                    case 'status':
+                        if (condition.operator === 'equals') {
+                            passes = (c.convStatus ?? 'open') === condition.value
+                        } else if (condition.operator === 'not_equals') {
+                            passes = (c.convStatus ?? 'open') !== condition.value
+                        }
+                        break
 
-                        case 'priority':
-                            const priority = (c as any).priority ?? 'medium'
-                            if (condition.operator === 'equals') {
-                                passes = priority === condition.value
-                            } else if (condition.operator === 'not_equals') {
-                                passes = priority !== condition.value
-                            }
-                            break
-                    }
+                    case 'assignedTo':
+                        if (condition.operator === 'equals') {
+                            passes = c.assignedToId === condition.value
+                        } else if (condition.operator === 'not_equals') {
+                            passes = c.assignedToId !== condition.value
+                        }
+                        break
 
-                    // Se alguma condição falhar, o contato não passa no filtro (operador E)
-                    if (!passes) return false
+                    case 'tags':
+                        const contactTags = c.tags || []
+                        if (condition.operator === 'equals') {
+                            passes = contactTags.some(t => t.tag.id === condition.value)
+                        } else if (condition.operator === 'not_equals') {
+                            passes = !contactTags.some(t => t.tag.id === condition.value)
+                        } else if (condition.operator === 'contains') {
+                            passes = contactTags.some(t => t.tag.name.toLowerCase().includes(condition.value.toLowerCase()))
+                        }
+                        break
+
+                    case 'channel':
+                        if (condition.operator === 'equals') {
+                            passes = c.channelId === condition.value
+                        } else if (condition.operator === 'not_equals') {
+                            passes = c.channelId !== condition.value
+                        }
+                        break
+
+                    case 'priority':
+                        const priority = (c as any).priority ?? 'medium'
+                        if (condition.operator === 'equals') {
+                            passes = priority === condition.value
+                        } else if (condition.operator === 'not_equals') {
+                            passes = priority !== condition.value
+                        }
+                        break
                 }
-            }
 
-            return true
-        })
+                // Se alguma condição falhar, o contato não passa no filtro (operador E)
+                if (!passes) return false
+            }
+        }
+
+        return true
+    }
+
+    // Aplica os filtros aos contatos (busca do backend ou lista local)
+    const filtered = search
+        ? (searchResults ?? []).filter(applyFilters)
+        : contacts.filter(applyFilters)
 
     return (
         <div className="flex h-full w-[300px] shrink-0 flex-col border-r">

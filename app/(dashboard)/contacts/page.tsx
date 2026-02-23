@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
     Users, Plus, Search, Loader2, Pencil, Trash2,
@@ -166,8 +167,11 @@ function ContactDialog({ open, onClose, onSaved, orgId, contact }: {
 
 // ─── Contact Row ───────────────────────────────────────────────────────────────
 
-function ContactRow({ contact, onEdit, onDelete }: {
-    contact: Contact; onEdit: (c: Contact) => void; onDelete: (c: Contact) => void
+function ContactRow({ contact, onEdit, onDelete, onStartConversation }: {
+    contact: Contact
+    onEdit: (c: Contact) => void
+    onDelete: (c: Contact) => void
+    onStartConversation: (c: Contact) => void
 }) {
     return (
         <div className="group flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow">
@@ -201,6 +205,15 @@ function ContactRow({ contact, onEdit, onDelete }: {
             </div>
 
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+                    onClick={() => onStartConversation(contact)}
+                    title="Iniciar conversa"
+                >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                </Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(contact)}>
                     <Pencil className="h-3.5 w-3.5" />
                 </Button>
@@ -219,6 +232,7 @@ const LIMIT = 30
 export default function ContactsPage() {
     const { data: perms } = usePermissions()
     const orgId = useOrgId()
+    const router = useRouter()
 
     const [contacts, setContacts]         = useState<Contact[]>([])
     const [total, setTotal]               = useState(0)
@@ -277,6 +291,10 @@ export default function ContactsPage() {
             if (orgId) loadContacts(orgId, search, page)
             toast.success('Contato removido.')
         } catch { toast.error('Erro ao remover contato.') }
+    }
+
+    function handleStartConversation(contact: Contact) {
+        router.push(`/conversations?contactId=${contact.id}`)
     }
 
     const totalPages = Math.ceil(total / LIMIT)
@@ -372,6 +390,7 @@ export default function ContactsPage() {
                                 <ContactRow key={c.id} contact={c}
                                     onEdit={(c) => { setEditContact(c); setFormOpen(true) }}
                                     onDelete={setDeleteTarget}
+                                    onStartConversation={handleStartConversation}
                                 />
                             ))}
                         </div>
