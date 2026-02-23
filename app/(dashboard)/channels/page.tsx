@@ -816,12 +816,43 @@ function AddChannelDialog({
         const oauthUrl = `${API_URL}/facebook-oauth/connect?orgId=${orgId}`
         const oauthWindow = window.open(oauthUrl, 'Facebook OAuth', 'width=600,height=700')
 
-        // Monitora o retorno do OAuth
+        // Escuta mensagens do popup (postMessage)
+        const handleMessage = (event: MessageEvent) => {
+            // Valida origem
+            if (!event.origin.startsWith(API_URL) && !event.origin.startsWith(window.location.origin)) {
+                return
+            }
+
+            const { type, oauthSession, error } = event.data
+
+            if (type === 'OAUTH_SUCCESS' && oauthSession) {
+                setWabLoading(false)
+                loadOAuthPhoneNumbers(oauthSession)
+                window.removeEventListener('message', handleMessage)
+            } else if (type === 'OAUTH_ERROR' && error) {
+                setWabLoading(false)
+                const errorMessages: Record<string, string> = {
+                    'missing_params': 'Parâmetros ausentes no callback do Facebook.',
+                    'invalid_state': 'Sessão OAuth inválida ou expirada.',
+                    'config_missing': 'Facebook OAuth não está configurado no servidor.',
+                    'token_exchange_failed': 'Falha ao trocar código por token de acesso.',
+                    'no_business_accounts': 'Nenhuma conta de negócio encontrada.',
+                    'no_phone_numbers': 'Nenhum número de WhatsApp disponível.',
+                }
+                toast.error(errorMessages[error] || 'Erro ao conectar com Facebook.')
+                window.removeEventListener('message', handleMessage)
+            }
+        }
+
+        window.addEventListener('message', handleMessage)
+
+        // Monitora o retorno do OAuth (fallback para query params)
         const checkInterval = setInterval(() => {
             if (oauthWindow?.closed) {
                 clearInterval(checkInterval)
                 setWabLoading(false)
-                // Verifica se há sessão OAuth nos query params
+
+                // Verifica se há sessão OAuth nos query params (fallback)
                 const urlParams = new URLSearchParams(window.location.search)
                 const oauthSession = urlParams.get('oauth_session')
                 const oauthError = urlParams.get('oauth_error')
@@ -836,13 +867,14 @@ function AddChannelDialog({
                         'no_phone_numbers': 'Nenhum número de WhatsApp disponível.',
                     }
                     toast.error(errorMessages[oauthError] || 'Erro ao conectar com Facebook.')
-                    // Limpa os query params
                     window.history.replaceState({}, '', window.location.pathname)
                 } else if (oauthSession) {
-                    // Limpa os query params e carrega os números
                     window.history.replaceState({}, '', window.location.pathname)
                     loadOAuthPhoneNumbers(oauthSession)
                 }
+
+                // Remove listener após popup fechar
+                window.removeEventListener('message', handleMessage)
             }
         }, 500)
     }
