@@ -27,7 +27,6 @@ import {
     Zap,
     Kanban,
     ListTodo,
-    Monitor,
 
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -39,7 +38,7 @@ import { PermissionsContext, type OrgPermissions } from '@/contexts/permissions-
 import { PresenceProvider, usePresenceContext } from '@/contexts/presence-context'
 import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { GlobalEventCapture } from '@/components/GlobalEventCapture'
+// import { GlobalEventCapture } from '@/components/GlobalEventCapture' // TODO: Reativar quando implementar supervisão
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
 
@@ -349,17 +348,6 @@ function SidebarContent({
                         icon={BarChart2}
                         label="Relatórios"
                         active={pathname.startsWith('/dashboard')}
-                        expanded={expanded}
-                    />
-                )}
-
-                {/* Supervisão - Apenas Admin/Owner */}
-                {(permissions?.role === 'admin' || permissions?.role === 'owner') && (
-                    <NavItem
-                        href="/supervisao"
-                        icon={Monitor}
-                        label="Supervisão"
-                        active={pathname.startsWith('/supervisao')}
                         expanded={expanded}
                     />
                 )}
@@ -689,8 +677,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 userRole={permissions?.role || null}
                 organizationId={orgId}
             >
-                {/* Captura global de eventos para supervisão */}
-                <GlobalEventCapture />
+                {/* TODO: Reativar quando implementar supervisão */}
+                {/* <GlobalEventCapture /> */}
 
                 <div className="flex h-svh overflow-hidden bg-background">
                 {/* ── Sidebar ── */}
