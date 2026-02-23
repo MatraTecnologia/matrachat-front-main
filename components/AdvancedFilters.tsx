@@ -90,9 +90,17 @@ export function AdvancedFilters({
   // Atualizar campo
   function updateCondition(id: string, updates: Partial<FilterCondition>) {
     setConditions(
-      conditions.map(c =>
-        c.id === id ? { ...c, ...updates, value: '' } : c
-      )
+      conditions.map(c => {
+        if (c.id !== id) return c
+
+        // Se mudou o campo, reseta o valor (pois as opções mudam)
+        if (updates.field !== undefined) {
+          return { ...c, ...updates, value: '' }
+        }
+
+        // Se mudou apenas o operador, mantém o valor
+        return { ...c, ...updates }
+      })
     )
   }
 
@@ -115,13 +123,23 @@ export function AdvancedFilters({
     onOpenChange(false)
   }
 
+  // Obter operadores válidos para cada campo
+  function getValidOperators(field: FilterCondition['field']): Array<'equals' | 'not_equals' | 'contains'> {
+    // O operador "contains" só faz sentido para campos de texto
+    // Status, assignedTo, tags, channel e priority são valores exatos (IDs ou enums)
+    return ['equals', 'not_equals']
+  }
+
   // Obter opções de valor baseado no campo
   function getValueOptions(field: FilterCondition['field']) {
     switch (field) {
       case 'status':
         return STATUS_OPTIONS
       case 'assignedTo':
-        return members.map(m => ({ value: m.id, label: m.name }))
+        return [
+          { value: '__unassigned__', label: 'Não atribuído' },
+          ...members.map(m => ({ value: m.id, label: m.name }))
+        ]
       case 'tags':
         return tags.map(t => ({ value: t.id, label: t.name }))
       case 'channel':
@@ -185,9 +203,9 @@ export function AdvancedFilters({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(OPERATOR_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
+                    {getValidOperators(condition.field).map((operatorValue) => (
+                      <SelectItem key={operatorValue} value={operatorValue}>
+                        {OPERATOR_LABELS[operatorValue]}
                       </SelectItem>
                     ))}
                   </SelectContent>

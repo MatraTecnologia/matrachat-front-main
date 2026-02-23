@@ -590,9 +590,17 @@ function ConversationList({
 
                     case 'assignedTo':
                         if (condition.operator === 'equals') {
-                            passes = c.assignedToId === condition.value
+                            if (condition.value === '__unassigned__') {
+                                passes = c.assignedToId == null
+                            } else {
+                                passes = c.assignedToId === condition.value
+                            }
                         } else if (condition.operator === 'not_equals') {
-                            passes = c.assignedToId !== condition.value
+                            if (condition.value === '__unassigned__') {
+                                passes = c.assignedToId != null
+                            } else {
+                                passes = c.assignedToId !== condition.value
+                            }
                         }
                         break
 
@@ -602,8 +610,6 @@ function ConversationList({
                             passes = contactTags.some(t => t.tag.id === condition.value)
                         } else if (condition.operator === 'not_equals') {
                             passes = !contactTags.some(t => t.tag.id === condition.value)
-                        } else if (condition.operator === 'contains') {
-                            passes = contactTags.some(t => t.tag.name.toLowerCase().includes(condition.value.toLowerCase()))
                         }
                         break
 
