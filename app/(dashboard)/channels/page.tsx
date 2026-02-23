@@ -73,7 +73,19 @@ function useOrgId() {
     useEffect(() => {
         api.get('/organizations')
             .then(({ data }) => {
-                if (Array.isArray(data) && data.length > 0) setOrgId(data[0].id)
+                if (Array.isArray(data) && data.length > 0) {
+                    // Em multi-tenant, busca pela organização do domínio atual
+                    const currentDomain = window.location.hostname
+
+                    // Tenta encontrar organização que corresponde ao domínio atual
+                    const matchingOrg = data.find((org: any) =>
+                        org.domain === currentDomain ||
+                        org.slug === currentDomain.split('.')[0]
+                    )
+
+                    // Se encontrou, usa ela; senão, usa a primeira (fallback)
+                    setOrgId(matchingOrg?.id || data[0].id)
+                }
             })
             .catch(() => null)
     }, [])
