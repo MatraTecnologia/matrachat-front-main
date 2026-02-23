@@ -792,9 +792,16 @@ function AddChannelDialog({
     }
 
     // ── WhatsApp Business OAuth ───────────────────────────────────────────────
+    const orgId = useOrgId()
+
     function startFacebookOAuth() {
+        if (!orgId) {
+            toast.error('Organização não detectada. Recarregue a página.')
+            return
+        }
+
         setWabLoading(true)
-        const oauthUrl = `${API_URL}/facebook-oauth/connect`
+        const oauthUrl = `${API_URL}/facebook-oauth/connect?orgId=${orgId}`
         const oauthWindow = window.open(oauthUrl, 'Facebook OAuth', 'width=600,height=700')
 
         // Monitora o retorno do OAuth
