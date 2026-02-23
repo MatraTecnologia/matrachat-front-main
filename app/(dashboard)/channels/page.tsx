@@ -1217,6 +1217,107 @@ function AddChannelDialog({
                     </>
                 )}
 
+                {/* WhatsApp Business OAuth - Seleção de Número */}
+                {step === 'whatsapp-business-oauth-select' && (
+                    <>
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <MessageCircle className="h-5 w-5 text-blue-600" /> Selecione o número
+                            </DialogTitle>
+                            <DialogDescription>
+                                Escolha qual número do WhatsApp Business você deseja conectar.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        {oauthLoading ? (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : (
+                            <>
+                                <ScrollArea className="max-h-[400px] pr-4">
+                                    <div className="space-y-3 mt-2">
+                                        {/* Nome do canal */}
+                                        <div className="space-y-1.5">
+                                            <Label>Nome do canal (opcional)</Label>
+                                            <Input
+                                                placeholder="ex: WhatsApp Business - DECOL"
+                                                value={wabName}
+                                                onChange={(e) => setWabName(e.target.value)}
+                                            />
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Se não preencher, usaremos o nome verificado do número
+                                            </p>
+                                        </div>
+
+                                        {/* Lista de números disponíveis */}
+                                        <div className="space-y-2">
+                                            <Label>Números disponíveis ({oauthPhoneNumbers.length})</Label>
+                                            {oauthPhoneNumbers.map((phone) => (
+                                                <button
+                                                    key={phone.id}
+                                                    onClick={() => setSelectedPhoneNumberId(phone.id)}
+                                                    className={cn(
+                                                        'w-full flex items-start gap-3 rounded-xl border-2 p-4 transition-colors text-left',
+                                                        selectedPhoneNumberId === phone.id
+                                                            ? 'border-primary bg-primary/5'
+                                                            : 'border-input hover:border-primary/50 hover:bg-muted/50'
+                                                    )}
+                                                >
+                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100">
+                                                        <MessageCircle className="h-5 w-5 text-green-600" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-sm">{phone.verifiedName}</p>
+                                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                                            {phone.displayPhoneNumber}
+                                                        </p>
+                                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                                            {phone.businessAccountName}
+                                                        </p>
+                                                        {phone.qualityRating && (
+                                                            <Badge className="mt-1.5 text-[10px] h-5">
+                                                                Qualidade: {phone.qualityRating}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    {selectedPhoneNumberId === phone.id && (
+                                                        <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {oauthPhoneNumbers.length === 0 && (
+                                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                                                <XCircle className="h-12 w-12 text-muted-foreground mb-3" />
+                                                <p className="text-sm font-medium">Nenhum número disponível</p>
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    Verifique se você tem números configurados no WhatsApp Business
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </ScrollArea>
+
+                                <div className="flex gap-2 mt-4">
+                                    <Button variant="outline" className="flex-1" onClick={() => setStep('whatsapp-business-form')}>
+                                        Voltar
+                                    </Button>
+                                    <Button
+                                        className="flex-1"
+                                        onClick={createChannelWithOAuth}
+                                        disabled={!selectedPhoneNumberId || oauthLoading}
+                                    >
+                                        {oauthLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Criar canal
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </>
+                )}
+
                 {/* WhatsApp QR */}
                 {step === 'whatsapp-qr' && (
                     <>
