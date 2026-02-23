@@ -582,6 +582,7 @@ function ChannelCard({
     onWidgetConfig,
     onEmbedIframe,
     onTest,
+    onRefresh,
 }: {
     channel: Channel
     onDelete: (id: string) => void
@@ -589,6 +590,7 @@ function ChannelCard({
     onWidgetConfig?: (channel: Channel) => void
     onEmbedIframe?: (channel: Channel) => void
     onTest?: (channel: Channel) => void
+    onRefresh?: (channel: Channel) => void
 }) {
     return (
         <div className="flex items-center gap-4 rounded-xl border bg-background p-4 shadow-sm transition-shadow hover:shadow-md">
@@ -679,6 +681,17 @@ function ChannelCard({
                     >
                         <Wifi className="h-3.5 w-3.5" />
                         Conectar
+                    </Button>
+                )}
+                {channel.type === 'whatsapp' && channel.status === 'connected' && onRefresh && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        onClick={() => onRefresh(channel)}
+                        title="Atualizar status e telefone"
+                    >
+                        <RefreshCw className="h-4 w-4" />
                     </Button>
                 )}
                 <Button
@@ -1668,6 +1681,18 @@ export default function ChannelsPage() {
         setDialogOpen(true)
     }
 
+    async function handleRefresh(ch: Channel) {
+        try {
+            await api.get(`/channels/${ch.id}/whatsapp/status`)
+            // Recarrega os canais para mostrar o telefone atualizado
+            const { data } = await api.get('/channels')
+            setChannels(data)
+            toast.success('Telefone atualizado!')
+        } catch {
+            toast.error('Erro ao atualizar telefone.')
+        }
+    }
+
     const whatsapp = channels.filter((c) => c.type === 'whatsapp')
     const whatsappBusiness = channels.filter((c) => c.type === 'whatsapp-business')
     const apiChannels = channels.filter((c) => c.type === 'api')
@@ -1683,24 +1708,13 @@ export default function ChannelsPage() {
                     <h1 className="text-lg font-semibold">Canais</h1>
                     <p className="text-sm text-muted-foreground">Gerencie suas integrações de atendimento</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={loadChannels}
-                        disabled={!orgId || loading}
-                        title="Atualizar status e telefones"
-                    >
-                        <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                    </Button>
-                    <Button
-                        onClick={() => { setReconnectChannel(undefined); setDialogOpen(true) }}
-                        disabled={!orgId}
-                    >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Adicionar canal
-                    </Button>
-                </div>
+                <Button
+                    onClick={() => { setReconnectChannel(undefined); setDialogOpen(true) }}
+                    disabled={!orgId}
+                >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Adicionar canal
+                </Button>
             </div>
 
             {/* Loading / empty state — centralizado na altura disponível */}
@@ -1739,7 +1753,7 @@ export default function ChannelsPage() {
                                     <Badge variant="secondary" className="text-xs">{whatsapp.length}</Badge>
                                 </div>
                                 {whatsapp.map((ch) => (
-                                    <ChannelCard key={ch.id} channel={ch} onDelete={handleDelete} onReconnect={handleReconnect} onEmbedIframe={setEmbedChannel} />
+                                    <ChannelCard key={ch.id} channel={ch} onDelete={handleDelete} onReconnect={handleReconnect} onEmbedIframe={setEmbedChannel} onRefresh={handleRefresh} />
                                 ))}
 
                                 {/* ── Webhook info ── */}
@@ -1760,6 +1774,7 @@ export default function ChannelsPage() {
                                         onDelete={handleDelete}
                                         onReconnect={handleReconnect}
                                         onEmbedIframe={setEmbedChannel}
+                                        onRefresh={handleRefresh}
                                     />
                                 ))}
                             </section>
