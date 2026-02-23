@@ -569,7 +569,9 @@ function ConversationList({
         // Filtro de tab (minhas/não atribuídas/todas/sem canal)
         if (tab === 'mine' && c.assignedToId !== userId) return false
         if (tab === 'unassigned' && c.assignedToId != null) return false
-        // Nota: filtro 'nochannel' é tratado pela fonte de dados, não aqui
+        // IMPORTANTE: Contatos sem canal aparecem APENAS na tab "Sem Canal"
+        // Nas outras tabs, esconde contatos sem canal
+        if (tab !== 'nochannel' && c.channelId == null) return false
 
         // Filtro de tag
         if (tagFilter) {

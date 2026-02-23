@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
     Plus, Globe, MessageCircle, Plug, Trash2, RefreshCw,
     CheckCircle2, XCircle, Loader2, Copy, Check, Wifi, WifiOff, Clock, Settings2, ExternalLink,
-    FlaskConical, PlusCircle, Minus,
+    FlaskConical, PlusCircle, Minus, AlertTriangle,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -1432,6 +1432,114 @@ function AddChannelDialog({
     )
 }
 
+// ─── Delete Channel Dialog ────────────────────────────────────────────────────
+
+function DeleteChannelDialog({
+    channel,
+    open,
+    onClose,
+    onConfirm,
+}: {
+    channel: Channel | null
+    open: boolean
+    onClose: () => void
+    onConfirm: () => void
+}) {
+    const [deleting, setDeleting] = useState(false)
+
+    async function handleConfirm() {
+        setDeleting(true)
+        await onConfirm()
+        setDeleting(false)
+    }
+
+    if (!channel) return null
+
+    // Determina o nome da instância/canal baseado no tipo
+    const getInstanceName = () => {
+        if (channel.type === 'whatsapp' && channel.config) {
+            const cfg = channel.config as any
+            return cfg.instanceName || channel.name
+        }
+        return channel.name
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-destructive">
+                        <AlertTriangle className="h-5 w-5" />
+                        Confirmar Exclusão
+                    </DialogTitle>
+                    <DialogDescription>
+                        Esta ação não pode ser desfeita.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                    {/* Nome da instância/canal */}
+                    <div className="rounded-lg bg-muted p-3">
+                        <p className="text-sm font-medium mb-1">Canal a ser removido:</p>
+                        <p className="text-sm font-mono font-semibold text-foreground">{getInstanceName()}</p>
+                    </div>
+
+                    {/* Aviso sobre dessincronização */}
+                    <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 space-y-2">
+                        <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <p className="text-sm font-medium text-destructive">
+                                    Atenção: Impacto nos Dados
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    Ao excluir este canal:
+                                </p>
+                                <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1 ml-2">
+                                    <li>Todos os contatos vinculados a este canal serão <strong>dessincronizados</strong></li>
+                                    <li>As conversas existentes permanecerão no histórico, mas <strong>não receberão novas mensagens</strong></li>
+                                    <li>Você precisará <strong>reconfigurar o canal</strong> para restaurar a conexão</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p className="text-sm text-muted-foreground">
+                        Tem certeza que deseja remover este canal?
+                    </p>
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                    <Button
+                        variant="outline"
+                        onClick={onClose}
+                        disabled={deleting}
+                    >
+                        Cancelar
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        onClick={handleConfirm}
+                        disabled={deleting}
+                    >
+                        {deleting ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Removendo...
+                            </>
+                        ) : (
+                            <>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Sim, Remover Canal
+                            </>
+                        )}
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ChannelsPage() {
@@ -1444,6 +1552,7 @@ export default function ChannelsPage() {
     const [reconnectChannel, setReconnectChannel] = useState<Channel | undefined>()
     const [widgetChannel, setWidgetChannel] = useState<Channel | null>(null)
     const [embedChannel, setEmbedChannel] = useState<Channel | null>(null)
+    const [deleteChannel, setDeleteChannel] = useState<Channel | null>(null)
 
     function handleTest(ch: Channel) {
         router.push('/test')
@@ -1468,12 +1577,20 @@ export default function ChannelsPage() {
         toast.success('Canal adicionado!')
     }
 
-    async function handleDelete(id: string) {
-        if (!confirm('Remover este canal?')) return
+    function handleDelete(id: string) {
+        const channel = channels.find((c) => c.id === id)
+        if (channel) {
+            setDeleteChannel(channel)
+        }
+    }
+
+    async function confirmDelete() {
+        if (!deleteChannel) return
         try {
-            await api.delete(`/channels/${id}`)
-            setChannels((prev) => prev.filter((c) => c.id !== id))
-            toast.success('Canal removido.')
+            await api.delete(`/channels/${deleteChannel.id}`)
+            setChannels((prev) => prev.filter((c) => c.id !== deleteChannel.id))
+            toast.success('Canal removido com sucesso.')
+            setDeleteChannel(null)
         } catch {
             toast.error('Erro ao remover canal.')
         }
@@ -1610,6 +1727,13 @@ export default function ChannelsPage() {
                     onClose={() => setEmbedChannel(null)}
                 />
             )}
+
+            <DeleteChannelDialog
+                channel={deleteChannel}
+                open={!!deleteChannel}
+                onClose={() => setDeleteChannel(null)}
+                onConfirm={confirmDelete}
+            />
         </div>
     )
 }
