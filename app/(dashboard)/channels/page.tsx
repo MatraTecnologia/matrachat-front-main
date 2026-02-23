@@ -638,7 +638,7 @@ function ChannelCard({
                         <Settings2 className="h-4 w-4" />
                     </Button>
                 )}
-                {channel.type === 'whatsapp' && onEmbedIframe && (
+                {(channel.type === 'whatsapp' || channel.type === 'whatsapp-business') && onEmbedIframe && (
                     <Button
                         variant="ghost"
                         size="icon"
@@ -1485,6 +1485,7 @@ export default function ChannelsPage() {
     }
 
     const whatsapp = channels.filter((c) => c.type === 'whatsapp')
+    const whatsappBusiness = channels.filter((c) => c.type === 'whatsapp-business')
     const apiChannels = channels.filter((c) => c.type === 'api')
     const isEmpty = !loading && channels.length === 0
 
@@ -1539,7 +1540,7 @@ export default function ChannelsPage() {
                             <section className="space-y-3">
                                 <div className="flex items-center gap-2">
                                     <MessageCircle className="h-4 w-4 text-green-600" />
-                                    <h2 className="text-sm font-semibold">WhatsApp</h2>
+                                    <h2 className="text-sm font-semibold">WhatsApp (Evolution API)</h2>
                                     <Badge variant="secondary" className="text-xs">{whatsapp.length}</Badge>
                                 </div>
                                 {whatsapp.map((ch) => (
@@ -1548,6 +1549,24 @@ export default function ChannelsPage() {
 
                                 {/* ── Webhook info ── */}
                                 <WebhookInfoCard />
+                            </section>
+                        )}
+                        {whatsappBusiness.length > 0 && (
+                            <section className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <MessageCircle className="h-4 w-4 text-blue-600" />
+                                    <h2 className="text-sm font-semibold">WhatsApp Business API (Meta)</h2>
+                                    <Badge variant="secondary" className="text-xs">{whatsappBusiness.length}</Badge>
+                                </div>
+                                {whatsappBusiness.map((ch) => (
+                                    <ChannelCard
+                                        key={ch.id}
+                                        channel={ch}
+                                        onDelete={handleDelete}
+                                        onReconnect={handleReconnect}
+                                        onEmbedIframe={setEmbedChannel}
+                                    />
+                                ))}
                             </section>
                         )}
                         {apiChannels.length > 0 && (
