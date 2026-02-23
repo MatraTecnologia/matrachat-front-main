@@ -668,42 +668,44 @@ function ConversationList({
             </div>
 
             {/* Sub-tabs + tag filter */}
-            <div className="flex items-center gap-1 border-b px-3 py-1.5">
+            <div className="flex items-center gap-1 border-b px-3 py-1.5 min-h-[36px]">
                 {/* Apenas admin e owner podem ver as tabs "Todos", "Não atribuídos" e "Sem Canal" */}
-                {(['mine', 'unassigned', 'all', 'nochannel'] as ConvTab[])
-                    .filter((t) => {
-                        // Remove a tab "all" para membros que não são admin/owner
-                        if (t === 'all' && userRole !== 'admin' && userRole !== 'owner') return false
-                        // Remove a tab "unassigned" para membros que não são admin/owner
-                        if (t === 'unassigned' && userRole !== 'admin' && userRole !== 'owner') return false
-                        // Remove a tab "nochannel" para membros que não são admin/owner
-                        if (t === 'nochannel' && userRole !== 'admin' && userRole !== 'owner') return false
-                        return true
-                    })
-                    .map((t) => (
-                        <button key={t} onClick={() => onTabChange(t)}
-                            className={cn(
-                                'rounded px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1 whitespace-nowrap',
-                                tab === t ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
-                            )}
-                        >
-                            {t === 'mine' && 'Minhas'}
-                            {t === 'unassigned' && 'Não atrib.'}
-                            {t === 'all' && 'Todos'}
-                            {t === 'nochannel' && (
-                                <>
-                                    <Hash className="h-3 w-3" />
-                                    Sem Canal
-                                    {noChannelContacts.length > 0 && (
-                                        <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
-                                            {noChannelContacts.length}
-                                        </Badge>
-                                    )}
-                                </>
-                            )}
-                        </button>
-                    ))}
-                <div className="ml-auto flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-1 min-w-0">
+                    {(['mine', 'unassigned', 'all', 'nochannel'] as ConvTab[])
+                        .filter((t) => {
+                            // Remove a tab "all" para membros que não são admin/owner
+                            if (t === 'all' && userRole !== 'admin' && userRole !== 'owner') return false
+                            // Remove a tab "unassigned" para membros que não são admin/owner
+                            if (t === 'unassigned' && userRole !== 'admin' && userRole !== 'owner') return false
+                            // Remove a tab "nochannel" para membros que não são admin/owner
+                            if (t === 'nochannel' && userRole !== 'admin' && userRole !== 'owner') return false
+                            return true
+                        })
+                        .map((t) => (
+                            <button key={t} onClick={() => onTabChange(t)}
+                                className={cn(
+                                    'rounded px-2 py-1 text-xs font-medium transition-colors flex items-center gap-1 whitespace-nowrap shrink-0',
+                                    tab === t ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+                                )}
+                            >
+                                {t === 'mine' && 'Minhas'}
+                                {t === 'unassigned' && 'Não atrib.'}
+                                {t === 'all' && 'Todos'}
+                                {t === 'nochannel' && (
+                                    <>
+                                        <Hash className="h-3 w-3" />
+                                        Sem Canal
+                                        {noChannelContacts.length > 0 && (
+                                            <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[10px]">
+                                                {noChannelContacts.length}
+                                            </Badge>
+                                        )}
+                                    </>
+                                )}
+                            </button>
+                        ))}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
                     {/* Tag filter dropdown */}
                     {tags.length > 0 && (
                         <DropdownMenu>
