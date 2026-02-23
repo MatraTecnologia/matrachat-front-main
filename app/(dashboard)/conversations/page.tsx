@@ -75,7 +75,7 @@ type LocalMessage = {
 }
 
 type ConvStatus = 'all' | 'open' | 'resolved' | 'pending'
-type ConvTab    = 'mine' | 'unassigned' | 'all'
+type ConvTab    = 'mine' | 'unassigned' | 'all' | 'nochannel'
 
 // ─── Hook: orgId + currentUserId ───────────────────────────────────────────────
 
@@ -405,11 +405,13 @@ function ContactItem({
 type OrgTagRef = { id: string; name: string; color: string }
 
 function ConversationList({
-    contacts, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
+    contacts, noChannelContacts, noChannelLoading, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
     channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole, members,
     advancedFilterConditions, onOpenAdvancedFilters,
 }: {
     contacts: Contact[]
+    noChannelContacts: Contact[]
+    noChannelLoading: boolean
     loading: boolean
     selected: Contact | null
     onSelect: (c: Contact) => void
@@ -564,9 +566,10 @@ function ConversationList({
         const hasUnread = unreadIds.has(c.id)
         if (status !== 'all' && !hasUnread && (c.convStatus ?? 'open') !== status) return false
 
-        // Filtro de tab (minhas/não atribuídas/todas)
+        // Filtro de tab (minhas/não atribuídas/todas/sem canal)
         if (tab === 'mine' && c.assignedToId !== userId) return false
         if (tab === 'unassigned' && c.assignedToId != null) return false
+        // Nota: filtro 'nochannel' é tratado pela fonte de dados, não aqui
 
         // Filtro de tag
         if (tagFilter) {
@@ -639,10 +642,14 @@ function ConversationList({
         return true
     }
 
+    // Seleciona a fonte de dados correta dependendo da tab ativa
+    const sourceContacts = tab === 'nochannel' ? noChannelContacts : contacts
+    const sourceLoading = tab === 'nochannel' ? noChannelLoading : loading
+
     // Aplica os filtros aos contatos (busca do backend ou lista local)
     const filtered = search
         ? (searchResults ?? []).filter(applyFilters)
-        : contacts.filter(applyFilters)
+        : sourceContacts.filter(applyFilters)
 
     return (
         <div className="flex h-full w-[300px] shrink-0 flex-col border-r">
@@ -660,23 +667,38 @@ function ConversationList({
 
             {/* Sub-tabs + tag filter */}
             <div className="flex items-center gap-1 border-b px-3 py-1.5">
-                {/* Apenas admin e owner podem ver as tabs "Todos" e "Não atribuídos" */}
-                {(['mine', 'unassigned', 'all'] as ConvTab[])
+                {/* Apenas admin e owner podem ver as tabs "Todos", "Não atribuídos" e "Sem Canal" */}
+                {(['mine', 'unassigned', 'all', 'nochannel'] as ConvTab[])
                     .filter((t) => {
                         // Remove a tab "all" para membros que não são admin/owner
                         if (t === 'all' && userRole !== 'admin' && userRole !== 'owner') return false
                         // Remove a tab "unassigned" para membros que não são admin/owner
                         if (t === 'unassigned' && userRole !== 'admin' && userRole !== 'owner') return false
+                        // Remove a tab "nochannel" para membros que não são admin/owner
+                        if (t === 'nochannel' && userRole !== 'admin' && userRole !== 'owner') return false
                         return true
                     })
                     .map((t) => (
                         <button key={t} onClick={() => onTabChange(t)}
                             className={cn(
-                                'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                                'rounded px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1',
                                 tab === t ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
                             )}
                         >
-                            {t === 'mine' ? 'Minhas' : t === 'unassigned' ? 'Não atrib.' : 'Todos'}
+                            {t === 'mine' && 'Minhas'}
+                            {t === 'unassigned' && 'Não atrib.'}
+                            {t === 'all' && 'Todos'}
+                            {t === 'nochannel' && (
+                                <>
+                                    <Hash className="h-3 w-3" />
+                                    Sem Canal
+                                    {noChannelContacts.length > 0 && (
+                                        <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                                            {noChannelContacts.length}
+                                        </Badge>
+                                    )}
+                                </>
+                            )}
                         </button>
                     ))}
                 <div className="ml-auto flex items-center gap-1">
@@ -768,12 +790,12 @@ function ConversationList({
 
             {/* Lista */}
             <div className="flex-1 overflow-y-auto">
-                {(loading || searchLoading) && (
+                {(sourceLoading || searchLoading) && (
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
                 )}
-                {!loading && !searchLoading && filtered.length === 0 && (
+                {!sourceLoading && !searchLoading && filtered.length === 0 && (
                     <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
                         <MessageSquare className="h-8 w-8 text-muted-foreground/50" />
                         <p className="text-xs text-muted-foreground">
@@ -781,7 +803,7 @@ function ConversationList({
                         </p>
                     </div>
                 )}
-                {!loading && !searchLoading && filtered.map((c) => (
+                {!sourceLoading && !searchLoading && filtered.map((c) => (
                     <ContactItem
                         key={c.id}
                         contact={c}
@@ -2155,6 +2177,8 @@ function ConversationsPageInner() {
         isAdminOrOwner ? 'all' : 'mine'
     )
     const [contacts, setContacts]     = useState<Contact[]>([])
+    const [noChannelContacts, setNoChannelContacts] = useState<Contact[]>([])
+    const [noChannelLoading, setNoChannelLoading]   = useState(false)
     const [loading, setLoading]       = useState(true)
     const [selected, setSelected]     = useState<Contact | null>(null)
     const [waChannels, setWaChannels] = useState<ChannelRef[]>([])
@@ -2229,6 +2253,21 @@ function ConversationsPageInner() {
         } catch { /* silencioso */ }
     }, [])
 
+    const loadNoChannelContacts = useCallback(async () => {
+        if (!isAdminOrOwner) return
+        setNoChannelLoading(true)
+        try {
+            const { data } = await api.get('/contacts/no-channel', {
+                params: { limit: 500 }
+            })
+            setNoChannelContacts(data.contacts)
+        } catch {
+            setNoChannelContacts([])
+        } finally {
+            setNoChannelLoading(false)
+        }
+    }, [isAdminOrOwner])
+
     useEffect(() => {
         if (orgId) {
             loadContacts(tagFilter)
@@ -2236,8 +2275,11 @@ function ConversationsPageInner() {
             loadMembers()
             loadTags()
             loadNotificationSettings()
+            if (isAdminOrOwner) {
+                loadNoChannelContacts()
+            }
         }
-    }, [orgId, tagFilter, loadContacts, loadChannels, loadMembers, loadTags, loadNotificationSettings])
+    }, [orgId, tagFilter, loadContacts, loadChannels, loadMembers, loadTags, loadNotificationSettings, loadNoChannelContacts, isAdminOrOwner])
 
     // Auto-seleciona contato pelo contactId da URL
     useEffect(() => {
@@ -2428,6 +2470,8 @@ function ConversationsPageInner() {
             <div className="flex flex-1 overflow-hidden">
                 <ConversationList
                     contacts={contacts}
+                    noChannelContacts={noChannelContacts}
+                    noChannelLoading={noChannelLoading}
                     loading={loading}
                     selected={selected}
                     onSelect={handleSelectContact}
