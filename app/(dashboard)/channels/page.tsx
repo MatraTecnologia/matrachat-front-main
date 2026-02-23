@@ -64,7 +64,7 @@ type Channel = {
     }
 }
 
-type WizardStep = 'pick-type' | 'api-form' | 'whatsapp-form' | 'whatsapp-business-form' | 'whatsapp-qr' | 'done'
+type WizardStep = 'pick-type' | 'api-form' | 'whatsapp-form' | 'whatsapp-business-form' | 'whatsapp-business-oauth-select' | 'whatsapp-qr' | 'done'
 
 // ─── Hook: orgId da sessão ─────────────────────────────────────────────────────
 
@@ -791,6 +791,99 @@ function AddChannelDialog({
         }
     }
 
+    // ── WhatsApp Business OAuth ───────────────────────────────────────────────
+    function startFacebookOAuth() {
+        setWabLoading(true)
+        const oauthUrl = `${API_URL}/facebook-oauth/connect`
+        const oauthWindow = window.open(oauthUrl, 'Facebook OAuth', 'width=600,height=700')
+
+        // Monitora o retorno do OAuth
+        const checkInterval = setInterval(() => {
+            if (oauthWindow?.closed) {
+                clearInterval(checkInterval)
+                setWabLoading(false)
+                // Verifica se há sessão OAuth nos query params
+                const urlParams = new URLSearchParams(window.location.search)
+                const oauthSession = urlParams.get('oauth_session')
+                const oauthError = urlParams.get('oauth_error')
+
+                if (oauthError) {
+                    const errorMessages: Record<string, string> = {
+                        'missing_params': 'Parâmetros ausentes no callback do Facebook.',
+                        'invalid_state': 'Sessão OAuth inválida ou expirada.',
+                        'config_missing': 'Facebook OAuth não está configurado no servidor.',
+                        'token_exchange_failed': 'Falha ao trocar código por token de acesso.',
+                        'no_business_accounts': 'Nenhuma conta de negócio encontrada.',
+                        'no_phone_numbers': 'Nenhum número de WhatsApp disponível.',
+                    }
+                    toast.error(errorMessages[oauthError] || 'Erro ao conectar com Facebook.')
+                    // Limpa os query params
+                    window.history.replaceState({}, '', window.location.pathname)
+                } else if (oauthSession) {
+                    // Limpa os query params e carrega os números
+                    window.history.replaceState({}, '', window.location.pathname)
+                    loadOAuthPhoneNumbers(oauthSession)
+                }
+            }
+        }, 500)
+    }
+
+    // Estados para OAuth
+    const [oauthSessionKey, setOauthSessionKey] = useState<string | null>(null)
+    const [oauthPhoneNumbers, setOauthPhoneNumbers] = useState<Array<{
+        id: string
+        displayPhoneNumber: string
+        verifiedName: string
+        qualityRating?: string
+        businessAccountId: string
+        businessAccountName: string
+    }>>([])
+    const [selectedPhoneNumberId, setSelectedPhoneNumberId] = useState<string | null>(null)
+    const [oauthLoading, setOauthLoading] = useState(false)
+
+    async function loadOAuthPhoneNumbers(sessionKey: string) {
+        setOauthLoading(true)
+        try {
+            const { data } = await api.get(`/facebook-oauth/phone-numbers/${sessionKey}`)
+            setOauthSessionKey(sessionKey)
+            setOauthPhoneNumbers(data.phoneNumbers || [])
+            setStep('whatsapp-business-oauth-select')
+        } catch {
+            toast.error('Erro ao carregar números disponíveis.')
+        } finally {
+            setOauthLoading(false)
+        }
+    }
+
+    async function createChannelWithOAuth() {
+        if (!selectedPhoneNumberId || !oauthSessionKey) {
+            toast.error('Selecione um número de telefone.')
+            return
+        }
+
+        const selectedPhone = oauthPhoneNumbers.find(p => p.id === selectedPhoneNumberId)
+        if (!selectedPhone) return
+
+        const channelName = wabName.trim() || `WhatsApp Business - ${selectedPhone.verifiedName}`
+
+        setOauthLoading(true)
+        try {
+            const { data } = await api.post('/facebook-oauth/create-channel', {
+                sessionKey: oauthSessionKey,
+                phoneNumberId: selectedPhoneNumberId,
+                name: channelName,
+                businessAccountId: selectedPhone.businessAccountId,
+            })
+            onCreated(data)
+            setStep('done')
+            toast.success('Canal criado com sucesso!')
+        } catch {
+            toast.error('Erro ao criar canal.')
+        } finally {
+            setOauthLoading(false)
+        }
+    }
+
     // ── QR code + polling ────────────────────────────────────────────────────
     const fetchQrCode = useCallback(async (id: string) => {
         setQrLoading(true)
@@ -989,6 +1082,46 @@ function AddChannelDialog({
                                 Configure sua conexão com a API oficial do Meta. <a href="/WHATSAPP_BUSINESS_SETUP.md" target="_blank" className="underline">Ver guia completo</a>
                             </DialogDescription>
                         </DialogHeader>
+
+                        {/* OAuth ou Manual */}
+                        <div className="space-y-3 mt-4">
+                            {/* Botão OAuth (Recomendado) */}
+                            <button
+                                onClick={startFacebookOAuth}
+                                disabled={wabLoading}
+                                className="w-full flex items-center gap-3 rounded-xl border-2 border-blue-200 bg-blue-50 p-4 transition-colors hover:border-blue-300 hover:bg-blue-100 text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600">
+                                    <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-semibold text-sm text-blue-900">
+                                            Conectar com Facebook
+                                        </p>
+                                        <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0">
+                                            Recomendado
+                                        </Badge>
+                                    </div>
+                                    <p className="text-xs text-blue-700 mt-0.5">
+                                        Faça login e selecione o número automaticamente
+                                    </p>
+                                </div>
+                                {wabLoading && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+                            </button>
+
+                            <div className="relative">
+                                <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-muted-foreground/20"></div>
+                                </div>
+                                <div className="relative flex justify-center text-xs">
+                                    <span className="bg-background px-2 text-muted-foreground">ou configurar manualmente</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <ScrollArea className="max-h-[400px] pr-4">
                             <div className="space-y-3 mt-2">
                                 <div className="space-y-1.5">
