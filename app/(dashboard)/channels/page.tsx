@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import {
     Plus, Globe, MessageCircle, Plug, Trash2, RefreshCw,
     CheckCircle2, XCircle, Loader2, Copy, Check, Wifi, WifiOff, Clock, Settings2, ExternalLink,
-    FlaskConical, PlusCircle, Minus, AlertTriangle,
+    FlaskConical, PlusCircle, Minus, AlertTriangle, Phone,
 } from 'lucide-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -60,6 +61,7 @@ type Channel = {
         instanceName?: string
         evolutionUrl?: string
         phone?: string
+        profilePictureUrl?: string
         widgetConfig?: Partial<WidgetConfig>
     }
 }
@@ -590,9 +592,15 @@ function ChannelCard({
 }) {
     return (
         <div className="flex items-center gap-4 rounded-xl border bg-background p-4 shadow-sm transition-shadow hover:shadow-md">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-muted">
-                {typeIcon(channel.type)}
-            </div>
+            {/* Avatar com foto do perfil ou ícone padrão */}
+            <Avatar className="h-12 w-12 shrink-0">
+                {channel.config?.profilePictureUrl && (
+                    <AvatarImage src={channel.config.profilePictureUrl} alt={channel.name} />
+                )}
+                <AvatarFallback className="bg-muted">
+                    {typeIcon(channel.type)}
+                </AvatarFallback>
+            </Avatar>
 
             <div className="flex flex-1 flex-col min-w-0">
                 <div className="flex items-center gap-2">
@@ -603,9 +611,21 @@ function ChannelCard({
 
                 <div className="mt-1 flex items-center gap-2 flex-wrap">
                     {statusBadge(channel.status)}
-                    {channel.config?.phone && (
-                        <span className="text-xs text-muted-foreground">{channel.config.phone}</span>
+
+                    {/* Telefone */}
+                    {channel.config?.phone ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                            <Phone className="h-3 w-3" />
+                            {channel.config.phone}
+                        </span>
+                    ) : (channel.type === 'whatsapp' || channel.type === 'whatsapp-business') && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                            <AlertTriangle className="h-3 w-3" />
+                            Sem telefone
+                        </span>
                     )}
+
+                    {/* API Key */}
                     {channel.type === 'api' && channel.config?.apiKey && (
                         <span className="flex items-center gap-0.5 font-mono text-[11px] text-muted-foreground">
                             {channel.config.apiKey.slice(0, 16)}…
@@ -622,7 +642,7 @@ function ChannelCard({
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-violet-600"
                         onClick={() => onTest(channel)}
-                        title="Testar widget"
+                        title="Testar o widget de chat em uma nova página"
                     >
                         <FlaskConical className="h-4 w-4" />
                     </Button>
@@ -633,7 +653,7 @@ function ChannelCard({
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-foreground"
                         onClick={() => onWidgetConfig(channel)}
-                        title="Configurar Widget"
+                        title="Configurar aparência e comportamento do widget"
                     >
                         <Settings2 className="h-4 w-4" />
                     </Button>
@@ -644,20 +664,21 @@ function ChannelCard({
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-foreground"
                         onClick={() => onEmbedIframe(channel)}
-                        title="Embutir painel via iframe"
+                        title="Obter código iframe para embutir o painel em seu site"
                     >
                         <ExternalLink className="h-4 w-4" />
                     </Button>
                 )}
                 {channel.type === 'whatsapp' && channel.status !== 'connected' && (
                     <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1.5 border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800"
                         onClick={() => onReconnect(channel)}
-                        title="Reconectar"
+                        title="Clique para escanear o QR code e reconectar o WhatsApp"
                     >
-                        <Wifi className="h-4 w-4" />
+                        <Wifi className="h-3.5 w-3.5" />
+                        Conectar
                     </Button>
                 )}
                 <Button
@@ -665,7 +686,7 @@ function ChannelCard({
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     onClick={() => onDelete(channel.id)}
-                    title="Remover canal"
+                    title="Remover este canal permanentemente"
                 >
                     <Trash2 className="h-4 w-4" />
                 </Button>
