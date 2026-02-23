@@ -8,7 +8,7 @@ import {
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
     CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
-    ZoomIn, ZoomOut, RotateCcw, WifiOff,
+    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar, Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,6 +37,7 @@ import { useAgentSse, type SseNewMessage, type SseConvUpdated, type SseUserViewi
 import { toast } from 'sonner'
 import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 import { usePresenceContext } from '@/contexts/presence-context'
+import { AdvancedFilters, type FilterCondition } from '@/components/AdvancedFilters'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -406,6 +407,7 @@ type OrgTagRef = { id: string; name: string; color: string }
 function ConversationList({
     contacts, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
     channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole, members,
+    advancedFilterConditions, onOpenAdvancedFilters,
 }: {
     contacts: Contact[]
     loading: boolean
@@ -425,6 +427,8 @@ function ConversationList({
     onContactUpdated: (updated: Partial<Contact> & { id: string }) => void
     userRole: string | null
     members: MemberRef[]
+    advancedFilterConditions: FilterCondition[]
+    onOpenAdvancedFilters: () => void
 }) {
     const [search, setSearch] = useState('')
     const [modalContact, setModalContact] = useState<Contact | null>(null)
@@ -561,6 +565,63 @@ function ConversationList({
             if (status !== 'all' && !hasUnread && (c.convStatus ?? 'open') !== status) return false
             if (tab === 'mine'       && c.assignedToId !== userId) return false
             if (tab === 'unassigned' && c.assignedToId != null) return false
+
+            // Aplicar filtros avançados (condições com operador "E")
+            if (advancedFilterConditions.length > 0) {
+                for (const condition of advancedFilterConditions) {
+                    let passes = false
+
+                    switch (condition.field) {
+                        case 'status':
+                            if (condition.operator === 'equals') {
+                                passes = (c.convStatus ?? 'open') === condition.value
+                            } else if (condition.operator === 'not_equals') {
+                                passes = (c.convStatus ?? 'open') !== condition.value
+                            }
+                            break
+
+                        case 'assignedTo':
+                            if (condition.operator === 'equals') {
+                                passes = c.assignedToId === condition.value
+                            } else if (condition.operator === 'not_equals') {
+                                passes = c.assignedToId !== condition.value
+                            }
+                            break
+
+                        case 'tags':
+                            const contactTags = c.tags || []
+                            if (condition.operator === 'equals') {
+                                passes = contactTags.some(t => t.tag.id === condition.value)
+                            } else if (condition.operator === 'not_equals') {
+                                passes = !contactTags.some(t => t.tag.id === condition.value)
+                            } else if (condition.operator === 'contains') {
+                                passes = contactTags.some(t => t.tag.name.toLowerCase().includes(condition.value.toLowerCase()))
+                            }
+                            break
+
+                        case 'channel':
+                            if (condition.operator === 'equals') {
+                                passes = c.channelId === condition.value
+                            } else if (condition.operator === 'not_equals') {
+                                passes = c.channelId !== condition.value
+                            }
+                            break
+
+                        case 'priority':
+                            const priority = (c as any).priority ?? 'medium'
+                            if (condition.operator === 'equals') {
+                                passes = priority === condition.value
+                            } else if (condition.operator === 'not_equals') {
+                                passes = priority !== condition.value
+                            }
+                            break
+                    }
+
+                    // Se alguma condição falhar, o contato não passa no filtro (operador E)
+                    if (!passes) return false
+                }
+            }
+
             return true
         })
 
@@ -580,11 +641,13 @@ function ConversationList({
 
             {/* Sub-tabs + tag filter */}
             <div className="flex items-center gap-1 border-b px-3 py-1.5">
-                {/* Apenas admin e owner podem ver a tab "Todos" */}
+                {/* Apenas admin e owner podem ver as tabs "Todos" e "Não atribuídos" */}
                 {(['mine', 'unassigned', 'all'] as ConvTab[])
                     .filter((t) => {
                         // Remove a tab "all" para membros que não são admin/owner
                         if (t === 'all' && userRole !== 'admin' && userRole !== 'owner') return false
+                        // Remove a tab "unassigned" para membros que não são admin/owner
+                        if (t === 'unassigned' && userRole !== 'admin' && userRole !== 'owner') return false
                         return true
                     })
                     .map((t) => (
@@ -637,8 +700,18 @@ function ConversationList({
                             </DropdownMenuContent>
                         </DropdownMenu>
                     )}
-                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                        <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn('h-6 w-6 relative', advancedFilterConditions.length > 0 && 'text-primary')}
+                        onClick={onOpenAdvancedFilters}
+                    >
+                        <SlidersHorizontal className="h-3.5 w-3.5" />
+                        {advancedFilterConditions.length > 0 && (
+                            <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-primary text-[9px] font-medium text-primary-foreground flex items-center justify-center">
+                                {advancedFilterConditions.length}
+                            </span>
+                        )}
                     </Button>
                 </div>
             </div>
@@ -1291,7 +1364,16 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 assignedToId: data.assignedToId,
                 assignedTo: member ? { id: member.id, name: member.name, image: member.image } : null,
             })
-        } catch { /* silencioso */ } finally {
+
+            // Notificação de sucesso
+            if (memberId) {
+                toast.success(`Conversa atribuída a ${member?.name || 'agente'} com sucesso!`)
+            } else {
+                toast.success('Atribuição removida com sucesso!')
+            }
+        } catch {
+            toast.error('Erro ao atribuir conversa')
+        } finally {
             setAssigning(false)
         }
     }
@@ -2037,6 +2119,10 @@ function ConversationsPageInner() {
     const canSend = perms?.permissions.canSendMessages !== false
     const ownOnly = perms?.permissions.canViewOwnConversationsOnly === true
 
+    // Se não é admin/owner, deve ver apenas conversas atribuídas
+    const isAdminOrOwner = perms?.role === 'admin' || perms?.role === 'owner'
+    const shouldFilterByUser = !isAdminOrOwner
+
     const router        = useRouter()
     const searchParams  = useSearchParams()
     const channelFilter = searchParams.get('channelId')
@@ -2047,7 +2133,7 @@ function ConversationsPageInner() {
     const [status, setStatus]         = useState<ConvStatus>('all')
     // Membros normais começam na tab "Minhas", admin/owner começam em "Todos"
     const [tab, setTab]               = useState<ConvTab>(
-        perms?.role === 'admin' || perms?.role === 'owner' ? 'all' : 'mine'
+        isAdminOrOwner ? 'all' : 'mine'
     )
     const [contacts, setContacts]     = useState<Contact[]>([])
     const [loading, setLoading]       = useState(true)
@@ -2058,6 +2144,8 @@ function ConversationsPageInner() {
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
     const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null>(null)
     const [notifyNewMessage, setNotifyNewMessage] = useState(true)
+    const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
+    const [advancedFilterConditions, setAdvancedFilterConditions] = useState<FilterCondition[]>([])
     const [reconnectModal, setReconnectModal] = useState<{ open: boolean; contact: Contact | null; channel: ChannelRef | null }>({
         open: false,
         contact: null,
@@ -2068,7 +2156,13 @@ function ConversationsPageInner() {
         setLoading(true)
         try {
             const { data } = await api.get('/contacts', {
-                params: { limit: 500, hasMessages: true, ...(tId ? { tagId: tId } : {}), ...(ownOnly && userId ? { assignedToUserId: userId } : {}) },
+                params: {
+                    limit: 500,
+                    hasMessages: true,
+                    ...(tId ? { tagId: tId } : {}),
+                    // Se não é admin/owner OU se ownOnly está ativo, filtra por usuário
+                    ...((shouldFilterByUser || ownOnly) && userId ? { assignedToUserId: userId } : {})
+                },
             })
             setContacts(data.contacts)
         } catch {
@@ -2076,7 +2170,7 @@ function ConversationsPageInner() {
         } finally {
             setLoading(false)
         }
-    }, [ownOnly, userId])
+    }, [shouldFilterByUser, ownOnly, userId])
 
     const loadChannels = useCallback(async () => {
         try {
@@ -2284,6 +2378,11 @@ function ConversationsPageInner() {
         }
     }
 
+    function handleApplyAdvancedFilters(conditions: FilterCondition[]) {
+        setAdvancedFilterConditions(conditions)
+        toast.success(`${conditions.length} filtro(s) aplicado(s)`)
+    }
+
     function handleViewAnyway() {
         if (!reconnectModal.contact) return
 
@@ -2327,6 +2426,8 @@ function ConversationsPageInner() {
                     onContactUpdated={handleContactUpdated}
                     userRole={perms?.role ?? null}
                     members={members}
+                    advancedFilterConditions={advancedFilterConditions}
+                    onOpenAdvancedFilters={() => setAdvancedFiltersOpen(true)}
                 />
                 <div className="flex flex-1 overflow-hidden">
                     {selected && orgId
@@ -2396,6 +2497,16 @@ function ConversationsPageInner() {
                 orgId={orgId}
                 currentUserId={userId}
                 contacts={contacts}
+            />
+
+            {/* Modal de filtros avançados */}
+            <AdvancedFilters
+                open={advancedFiltersOpen}
+                onOpenChange={setAdvancedFiltersOpen}
+                onApply={handleApplyAdvancedFilters}
+                members={members}
+                tags={tags}
+                channels={waChannels}
             />
         </>
     )

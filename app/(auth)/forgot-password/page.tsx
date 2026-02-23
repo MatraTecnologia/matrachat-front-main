@@ -25,14 +25,44 @@ export default function ForgotPasswordPage() {
         try {
             // Better Auth: POST /auth/forget-password
             // redirectTo: URL base para onde o link de reset vai apontar
-            await api.post('/auth/forget-password', {
+            const response = await api.post('/auth/forget-password', {
                 email,
                 redirectTo: `${window.location.origin}/reset-password`,
             })
+
+            console.log('✅ E-mail de redefinição enviado:', response.data)
             setSent(true)
             toast.success('E-mail enviado! Verifique sua caixa de entrada.')
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Erro ao enviar o e-mail.')
+        } catch (err: any) {
+            console.error('❌ Erro ao solicitar redefinição de senha:', err)
+
+            // Tratamento específico de erros
+            let errorMessage = 'Erro ao enviar o e-mail.'
+
+            if (err.response) {
+                // Erro da API (4xx ou 5xx)
+                const status = err.response.status
+                const data = err.response.data
+
+                if (status === 404) {
+                    errorMessage = 'E-mail não encontrado. Verifique se está cadastrado.'
+                } else if (status === 429) {
+                    errorMessage = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
+                } else if (status === 400) {
+                    errorMessage = data.message || 'E-mail inválido.'
+                } else if (status >= 500) {
+                    errorMessage = 'Erro no servidor. Tente novamente em alguns instantes.'
+                } else {
+                    errorMessage = data.message || data.error || 'Erro ao processar solicitação.'
+                }
+            } else if (err.request) {
+                // Erro de rede (sem resposta do servidor)
+                errorMessage = 'Erro de conexão. Verifique sua internet e tente novamente.'
+            } else if (err.message) {
+                errorMessage = err.message
+            }
+
+            toast.error(errorMessage)
         } finally {
             setSubmitting(false)
         }

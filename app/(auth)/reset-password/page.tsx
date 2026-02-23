@@ -55,11 +55,40 @@ function ResetPasswordForm() {
         setSubmitting(true)
         try {
             // Better Auth: POST /auth/reset-password
-            await api.post('/auth/reset-password', { newPassword, token })
+            const response = await api.post('/auth/reset-password', { newPassword, token })
+            console.log('✅ Senha redefinida com sucesso:', response.data)
             toast.success('Senha redefinida com sucesso!')
-            router.push('/sign-in')
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Link inválido ou expirado.')
+
+            // Aguarda 1 segundo para o usuário ver a mensagem e redireciona
+            setTimeout(() => router.push('/sign-in'), 1000)
+        } catch (err: any) {
+            console.error('❌ Erro ao redefinir senha:', err)
+
+            // Tratamento específico de erros
+            let errorMessage = 'Erro ao redefinir senha.'
+
+            if (err.response) {
+                const status = err.response.status
+                const data = err.response.data
+
+                if (status === 400) {
+                    errorMessage = 'Token inválido ou expirado. Solicite um novo link.'
+                } else if (status === 404) {
+                    errorMessage = 'Link inválido. Solicite um novo link de redefinição.'
+                } else if (status === 429) {
+                    errorMessage = 'Muitas tentativas. Aguarde alguns minutos.'
+                } else if (status >= 500) {
+                    errorMessage = 'Erro no servidor. Tente novamente.'
+                } else {
+                    errorMessage = data.message || data.error || 'Link inválido ou expirado.'
+                }
+            } else if (err.request) {
+                errorMessage = 'Erro de conexão. Verifique sua internet.'
+            } else if (err.message) {
+                errorMessage = err.message
+            }
+
+            toast.error(errorMessage)
         } finally {
             setSubmitting(false)
         }
