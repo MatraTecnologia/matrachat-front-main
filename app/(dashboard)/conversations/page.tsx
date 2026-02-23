@@ -668,9 +668,9 @@ function ConversationList({
             </div>
 
             {/* Sub-tabs + tag filter */}
-            <div className="flex items-center gap-1 border-b px-3 py-1.5 min-h-[36px]">
+            <div className="flex items-start gap-1 border-b px-3 py-1.5 min-h-[36px]">
                 {/* Apenas admin e owner podem ver as tabs "Todos", "Não atribuídos" e "Sem Canal" */}
-                <div className="flex items-center gap-1 flex-1 min-w-0">
+                <div className="flex items-center gap-1 flex-1 min-w-0 flex-wrap">
                     {(['mine', 'unassigned', 'all', 'nochannel'] as ConvTab[])
                         .filter((t) => {
                             // Remove a tab "all" para membros que não são admin/owner
