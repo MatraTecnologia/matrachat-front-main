@@ -2543,19 +2543,6 @@ function ConversationsPageInner() {
                 next.set(contactId, (prev.get(contactId) ?? 0) + 1)
                 return next
             })
-            // Sonner toast for incoming message (only if notifications enabled)
-            if (notifyNewMessage) {
-                const contactName = ev.contactName ?? ev.contact?.name ?? contactsRef.current.find((c) => c.id === contactId)?.name ?? 'Novo contato'
-                const avatarUrl   = ev.contactAvatarUrl ?? ev.contact?.avatarUrl ?? contactsRef.current.find((c) => c.id === contactId)?.avatarUrl ?? undefined
-                const preview     = message.content.slice(0, 80) + (message.content.length > 80 ? '…' : '')
-                toast(contactName, {
-                    description: preview,
-                    icon: avatarUrl
-                        ? <img src={avatarUrl} alt={contactName} className="h-8 w-8 rounded-full object-cover" />
-                        : undefined,
-                    duration: 5000,
-                })
-            }
         }
         // Bubble the contact to top of list (or add if new contact)
         setContacts((prev) => {
@@ -2583,7 +2570,7 @@ function ConversationsPageInner() {
             const [item] = updated.splice(idx, 1)
             return [item, ...updated]
         })
-    }, [notifyNewMessage])
+    }, [])
 
     const handleConvUpdated = useCallback((ev: SseConvUpdated) => {
         setContacts((prev) => prev.map((c) => {

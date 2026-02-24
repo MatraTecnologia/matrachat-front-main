@@ -6,6 +6,7 @@ const RECONNECT_DELAY = 3000
 export type SseNewMessage = {
     type: 'new_message'
     contactId: string
+    assignedToId?: string | null
     channelId?: string | null
     externalId?: string | null
     contactName?: string | null

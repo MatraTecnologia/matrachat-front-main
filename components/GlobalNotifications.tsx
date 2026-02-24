@@ -89,7 +89,7 @@ function ReplyForm({
 
 // ─── Global WebSocket listener ────────────────────────────────────────────────
 
-export function GlobalNotifications({ orgId }: { orgId: string | null }) {
+export function GlobalNotifications({ orgId, userId }: { orgId: string | null; userId: string | null }) {
     const pathname = usePathname()
     const { socket } = usePresenceContext()
 
@@ -100,6 +100,8 @@ export function GlobalNotifications({ orgId }: { orgId: string | null }) {
         if (ev.message.direction !== 'inbound') return
         // Need channelId + externalId to allow reply
         if (!ev.channelId || !ev.externalId || !orgId) return
+        // Only notify if the conversation is assigned to the current user
+        if (ev.assignedToId !== userId) return
 
         const contactName = ev.contactName ?? ev.contact?.name ?? 'Novo contato'
         const avatarUrl   = ev.contactAvatarUrl ?? ev.contact?.avatarUrl ?? null
@@ -149,7 +151,7 @@ export function GlobalNotifications({ orgId }: { orgId: string | null }) {
             ),
             { duration: 20000, id: `msg-${ev.contactId}` }
         )
-    }, [pathname, orgId])
+    }, [pathname, orgId, userId])
 
     useEffect(() => {
         if (!socket) return

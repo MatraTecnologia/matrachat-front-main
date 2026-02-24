@@ -733,7 +733,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Global real-time notifications (active on all pages except /conversations) */}
-            <GlobalNotifications orgId={orgId} />
+            <GlobalNotifications orgId={orgId} userId={userId} />
             </PresenceProvider>
         </TooltipProvider>
     )
