@@ -1,7 +1,5 @@
-import { useEffect, useRef, useCallback } from 'react'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333'
-const RECONNECT_DELAY = 3000
+import { useEffect, useRef } from 'react'
+import { usePresenceContext } from '../contexts/presence-context'
 
 export type SseNewMessage = {
     type: 'new_message'
@@ -63,6 +61,8 @@ export type SseUserTyping = {
     isTyping: boolean
 }
 
+type AgentEvent = SseNewMessage | SseConvUpdated | SseUserViewing | SseUserLeft | SseUserTyping
+
 type Handlers = {
     onNewMessage?: (ev: SseNewMessage) => void
     onConvUpdated?: (ev: SseConvUpdated) => void
@@ -71,72 +71,39 @@ type Handlers = {
     onUserTyping?: (ev: SseUserTyping) => void
 }
 
-export function useAgentSse(orgId: string | null, handlers: Handlers) {
-    const esRef = useRef<EventSource | null>(null)
-    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+// orgId mantido por compatibilidade de API mas não é mais necessário —
+// o servidor já filtra por org via Socket.io rooms (org:${orgId}).
+export function useAgentSse(_orgId: string | null, handlers: Handlers) {
+    const { socket } = usePresenceContext()
     const handlersRef = useRef(handlers)
     handlersRef.current = handlers
 
-    const connect = useCallback(() => {
-        if (!orgId) return
-        if (esRef.current) {
-            esRef.current.close()
-            esRef.current = null
-        }
-
-        const url = `${API_BASE}/agent/sse`
-        const es = new EventSource(url, { withCredentials: true })
-        esRef.current = es
-
-        // Agent SSE sends named events: "new_message" and "conv_updated"
-        es.addEventListener('new_message', (e: MessageEvent) => {
-            try {
-                const event: SseNewMessage = JSON.parse(e.data)
-                handlersRef.current.onNewMessage?.(event)
-            } catch { /* ignore parse errors */ }
-        })
-
-        es.addEventListener('conv_updated', (e: MessageEvent) => {
-            try {
-                const event: SseConvUpdated = JSON.parse(e.data)
-                handlersRef.current.onConvUpdated?.(event)
-            } catch { /* ignore parse errors */ }
-        })
-
-        es.addEventListener('user_viewing', (e: MessageEvent) => {
-            try {
-                const event: SseUserViewing = JSON.parse(e.data)
-                handlersRef.current.onUserViewing?.(event)
-            } catch { /* ignore parse errors */ }
-        })
-
-        es.addEventListener('user_left', (e: MessageEvent) => {
-            try {
-                const event: SseUserLeft = JSON.parse(e.data)
-                handlersRef.current.onUserLeft?.(event)
-            } catch { /* ignore parse errors */ }
-        })
-
-        es.addEventListener('user_typing', (e: MessageEvent) => {
-            try {
-                const event: SseUserTyping = JSON.parse(e.data)
-                handlersRef.current.onUserTyping?.(event)
-            } catch { /* ignore parse errors */ }
-        })
-
-        es.onerror = () => {
-            es.close()
-            esRef.current = null
-            timerRef.current = setTimeout(connect, RECONNECT_DELAY)
-        }
-    }, [orgId])
-
     useEffect(() => {
-        connect()
-        return () => {
-            if (timerRef.current) clearTimeout(timerRef.current)
-            esRef.current?.close()
-            esRef.current = null
+        if (!socket) return
+
+        function handleAgentEvent(event: AgentEvent) {
+            switch (event.type) {
+                case 'new_message':
+                    handlersRef.current.onNewMessage?.(event)
+                    break
+                case 'conv_updated':
+                    handlersRef.current.onConvUpdated?.(event)
+                    break
+                case 'user_viewing':
+                    handlersRef.current.onUserViewing?.(event)
+                    break
+                case 'user_left':
+                    handlersRef.current.onUserLeft?.(event)
+                    break
+                case 'user_typing':
+                    handlersRef.current.onUserTyping?.(event)
+                    break
+            }
         }
-    }, [connect])
+
+        socket.on('agent_event', handleAgentEvent)
+        return () => {
+            socket.off('agent_event', handleAgentEvent)
+        }
+    }, [socket])
 }
