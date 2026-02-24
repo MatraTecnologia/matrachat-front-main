@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Progress } from '@/components/ui/progress'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
@@ -245,6 +246,8 @@ export default function ContactsPage() {
     const [unifying, setUnifying]         = useState(false)
     const [unifyOpen, setUnifyOpen]       = useState(false)
     const [unifyResult, setUnifyResult]   = useState<{ mergedGroups: number; removedContacts: number } | null>(null)
+    const [unifyProgress, setUnifyProgress] = useState(0)
+    const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const [formOpen, setFormOpen]         = useState(false)
     const [editContact, setEditContact]   = useState<Contact | undefined>()
     const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null)
@@ -277,14 +280,36 @@ export default function ContactsPage() {
 
     async function handleUnify() {
         setUnifying(true)
+        setUnifyProgress(0)
+
+        // Progresso simulado: sobe até ~85% enquanto aguarda resposta
+        progressTimerRef.current = setInterval(() => {
+            setUnifyProgress((prev) => {
+                if (prev >= 85) {
+                    clearInterval(progressTimerRef.current!)
+                    return 85
+                }
+                // Incremento mais rápido no início, mais lento ao se aproximar de 85%
+                const step = prev < 40 ? 6 : prev < 70 ? 3 : 1
+                return Math.min(prev + step, 85)
+            })
+        }, 300)
+
         try {
             const { data } = await api.post('/contacts/unify')
+            clearInterval(progressTimerRef.current!)
+            setUnifyProgress(100)
+            await new Promise((r) => setTimeout(r, 400)) // pausa breve para mostrar 100%
             setUnifyResult(data)
             if (orgId) loadContacts(orgId, search, page)
         } catch (err: unknown) {
+            clearInterval(progressTimerRef.current!)
+            setUnifyProgress(0)
             toast.error(err instanceof Error ? err.message : 'Erro ao unificar contatos.')
             setUnifyOpen(false)
-        } finally { setUnifying(false) }
+        } finally {
+            setUnifying(false)
+        }
     }
 
     async function handleSync(channelId: string, channelName: string) {
@@ -455,20 +480,29 @@ export default function ContactsPage() {
             </AlertDialog>
 
             {/* Dialog Unificar */}
-            <AlertDialog open={unifyOpen} onOpenChange={(v) => { if (!unifying) setUnifyOpen(v) }}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2">
+            <Dialog open={unifyOpen} onOpenChange={(v) => { if (!unifying) { setUnifyOpen(v); if (!v) { setUnifyResult(null); setUnifyProgress(0) } } }}>
+                <DialogContent className="sm:max-w-md" onInteractOutside={(e) => { if (unifying) e.preventDefault() }}>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
                             <GitMerge className="h-5 w-5 text-primary" />
-                            {unifyResult ? 'Unificação concluída' : 'Unificar contatos duplicados'}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription asChild>
-                            <div className="space-y-2 text-sm text-muted-foreground">
-                                {unifyResult ? (
+                            {unifyResult ? 'Unificação concluída' : unifying ? 'Unificando contatos...' : 'Unificar contatos duplicados'}
+                        </DialogTitle>
+                        <DialogDescription asChild>
+                            <div className="space-y-3 text-sm text-muted-foreground pt-1">
+                                {unifying ? (
+                                    <div className="space-y-3">
+                                        <p>Comparando contatos e migrando dados. Isso pode levar alguns instantes...</p>
+                                        <div className="space-y-1.5">
+                                            <Progress value={unifyProgress} className="h-2" />
+                                            <p className="text-xs text-right text-muted-foreground">{unifyProgress}%</p>
+                                        </div>
+                                    </div>
+                                ) : unifyResult ? (
                                     unifyResult.mergedGroups === 0 ? (
                                         <p>Nenhum contato duplicado encontrado. Tudo já está unificado!</p>
                                     ) : (
                                         <div className="space-y-1">
+                                            <Progress value={100} className="h-2 mb-3" />
                                             <p className="font-medium text-foreground">
                                                 {unifyResult.mergedGroups} grupo{unifyResult.mergedGroups !== 1 ? 's' : ''} unificado{unifyResult.mergedGroups !== 1 ? 's' : ''}.
                                             </p>
@@ -480,33 +514,29 @@ export default function ContactsPage() {
                                     )
                                 ) : (
                                     <>
-                                        <p>
-                                            Contatos com o mesmo número de telefone serão unificados.
-                                        </p>
-                                        <p>
-                                            O contato vinculado ao canal WhatsApp será mantido como principal. As mensagens, tags e campanhas dos duplicados serão transferidas para ele.
-                                        </p>
+                                        <p>Contatos com o mesmo número de telefone serão unificados.</p>
+                                        <p>O contato vinculado ao canal WhatsApp será mantido como principal. As mensagens, tags e campanhas dos duplicados serão transferidas para ele.</p>
                                         <p className="font-medium text-foreground">Esta ação não pode ser desfeita.</p>
                                     </>
                                 )}
                             </div>
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
                         {unifyResult ? (
-                            <AlertDialogAction onClick={() => setUnifyOpen(false)}>Fechar</AlertDialogAction>
+                            <Button onClick={() => { setUnifyOpen(false); setUnifyResult(null); setUnifyProgress(0) }}>Fechar</Button>
                         ) : (
                             <>
-                                <AlertDialogCancel disabled={unifying}>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleUnify} disabled={unifying}>
+                                <Button variant="outline" onClick={() => setUnifyOpen(false)} disabled={unifying}>Cancelar</Button>
+                                <Button onClick={handleUnify} disabled={unifying}>
                                     {unifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     Unificar agora
-                                </AlertDialogAction>
+                                </Button>
                             </>
                         )}
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

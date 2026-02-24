@@ -33,7 +33,7 @@ import { Separator } from '@/components/ui/separator'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/contexts/permissions-context'
 import { NoPermission } from '@/components/no-permission'
-import { useAgentSse, type SseNewMessage, type SseConvUpdated, type SseUserViewing, type SseUserLeft, type SseUserTyping } from '@/hooks/useAgentSse'
+import type { SseNewMessage, SseConvUpdated } from '@/hooks/useAgentSse'
 import { toast } from 'sonner'
 import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 import { usePresenceContext } from '@/contexts/presence-context'
@@ -2425,7 +2425,17 @@ function ConversationsPageInner() {
         })
     }, [])
 
-    useAgentSse(orgId, { onNewMessage: handleNewMessage, onConvUpdated: handleConvUpdated })
+    // ── WebSocket: recebe eventos de mensagens via Socket.io (presence-context) ───
+    const { socket } = usePresenceContext()
+    useEffect(() => {
+        if (!socket) return
+        const handler = (event: SseNewMessage | SseConvUpdated) => {
+            if (event.type === 'new_message') handleNewMessage(event as SseNewMessage)
+            else if (event.type === 'conv_updated') handleConvUpdated(event as SseConvUpdated)
+        }
+        socket.on('agent_event', handler)
+        return () => { socket.off('agent_event', handler) }
+    }, [socket, handleNewMessage, handleConvUpdated])
 
     // ── Contact update handler (from assign / resolve) ────────────────────────
 
