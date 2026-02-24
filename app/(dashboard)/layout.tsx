@@ -28,6 +28,7 @@ import {
     Kanban,
     ListTodo,
     FileText,
+    Layers,
 
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -495,6 +496,17 @@ function SidebarContent({
                         icon={Megaphone}
                         label="Campanhas"
                         active={pathname.startsWith('/campaigns')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* Monitor de Filas — apenas admin/owner */}
+                {(permissions?.role === 'admin' || permissions?.role === 'owner') && (
+                    <NavItem
+                        href="/queue"
+                        icon={Layers}
+                        label="Monitor de Filas"
+                        active={pathname.startsWith('/queue')}
                         expanded={expanded}
                     />
                 )}
