@@ -1,10 +1,11 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
-import { useAgentSse, type SseNewMessage } from '@/hooks/useAgentSse'
+import type { SseNewMessage } from '@/hooks/useAgentSse'
+import { usePresenceContext } from '@/contexts/presence-context'
 import { api } from '@/lib/api'
 
 // ─── Mini reply form rendered inside the Sonner toast ────────────────────────
@@ -86,10 +87,11 @@ function ReplyForm({
     )
 }
 
-// ─── Global SSE listener ──────────────────────────────────────────────────────
+// ─── Global WebSocket listener ────────────────────────────────────────────────
 
 export function GlobalNotifications({ orgId }: { orgId: string | null }) {
     const pathname = usePathname()
+    const { socket } = usePresenceContext()
 
     const handleNewMessage = useCallback((ev: SseNewMessage) => {
         // Conversations page manages its own notifications — avoid duplicates
@@ -149,7 +151,14 @@ export function GlobalNotifications({ orgId }: { orgId: string | null }) {
         )
     }, [pathname, orgId])
 
-    useAgentSse(orgId, { onNewMessage: handleNewMessage })
+    useEffect(() => {
+        if (!socket) return
+        const handler = (event: SseNewMessage) => {
+            if (event.type === 'new_message') handleNewMessage(event)
+        }
+        socket.on('agent_event', handler)
+        return () => { socket.off('agent_event', handler) }
+    }, [socket, handleNewMessage])
 
     return null
 }
