@@ -30,6 +30,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
+import { Progress } from '@/components/ui/progress'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/contexts/permissions-context'
 import { NoPermission } from '@/components/no-permission'
@@ -438,6 +439,36 @@ function ConversationList({
     const [searchResults, setSearchResults] = useState<Contact[] | null>(null)
     const [searchLoading, setSearchLoading] = useState(false)
 
+    // Sync histórico completo
+    const [syncingHistory, setSyncingHistory] = useState(false)
+    const [syncProgress, setSyncProgress] = useState(0)
+    const [syncResult, setSyncResult] = useState<{ messagesImported: number; contactsCreated: number } | null>(null)
+    const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+    async function handleSyncAllHistory() {
+        if (syncingHistory) return
+        setSyncingHistory(true)
+        setSyncResult(null)
+        setSyncProgress(0)
+        // Progresso animado até 85% enquanto aguarda
+        syncTimerRef.current = setInterval(() => {
+            setSyncProgress((p) => (p < 85 ? p + 3 : p))
+        }, 400)
+        try {
+            const { data } = await api.post('/channels/whatsapp/sync-all-history')
+            clearInterval(syncTimerRef.current!)
+            setSyncProgress(100)
+            setSyncResult({ messagesImported: data.messagesImported, contactsCreated: data.contactsCreated })
+            toast.success(`Histórico sincronizado: ${data.messagesImported} mensagem(ns), ${data.contactsCreated} contato(s) criado(s).`)
+        } catch {
+            clearInterval(syncTimerRef.current!)
+            setSyncProgress(0)
+            toast.error('Erro ao sincronizar histórico.')
+        } finally {
+            setSyncingHistory(false)
+        }
+    }
+
     // Busca no backend com debounce quando há texto — garante que todos os contatos sejam encontrados
     useEffect(() => {
         if (!search || !orgId) {
@@ -761,6 +792,43 @@ function ConversationList({
                     </Button>
                 </div>
             </div>
+
+            {/* Sync histórico completo — apenas admin/owner */}
+            {(userRole === 'admin' || userRole === 'owner') && (
+                <div className="border-b px-3 py-1.5">
+                    {syncingHistory ? (
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
+                                <span className="text-[11px] text-muted-foreground">Sincronizando histórico...</span>
+                                <span className="ml-auto text-[11px] text-muted-foreground">{syncProgress}%</span>
+                            </div>
+                            <Progress value={syncProgress} className="h-1" />
+                        </div>
+                    ) : syncResult ? (
+                        <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" />
+                            <span className="text-[11px] text-muted-foreground flex-1 truncate">
+                                {syncResult.messagesImported} msg · {syncResult.contactsCreated} contato(s) novo(s)
+                            </span>
+                            <button
+                                onClick={() => setSyncResult(null)}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleSyncAllHistory}
+                            className="flex w-full items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            <RefreshCw className="h-3 w-3 shrink-0" />
+                            Sincronizar histórico de instâncias
+                        </button>
+                    )}
+                </div>
+            )}
 
             {/* Active tag filter badge */}
             {activeTag && (
