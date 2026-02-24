@@ -49,6 +49,7 @@ type ChannelRef = { id: string; name: string; type: string; status: string }
 type ContactTag = { tag: { id: string; name: string; color: string } }
 type MemberRef  = { id: string; name: string; email: string; image?: string | null }
 type RawMember  = { id: string; role: string; canAssign: boolean; user: { id: string; name: string; email: string; image?: string | null } }
+type TeamRef    = { id: string; name: string; color: string; description?: string | null }
 
 type Contact = {
     id: string
@@ -62,6 +63,8 @@ type Contact = {
     convStatus: string
     assignedToId?: string | null
     assignedTo?: { id: string; name: string; image?: string | null } | null
+    teamId?: string | null
+    team?: { id: string; name: string; color: string } | null
     createdAt: string
     channel?: ChannelRef | null
     tags?: ContactTag[]
@@ -196,6 +199,107 @@ function ContactModal({ contact, open, onClose }: { contact: Contact | null; ope
     )
 }
 
+// ─── ConversationPreview (hover) ──────────────────────────────────────────────
+
+type PreviewMsg = {
+    id: string
+    content: string
+    direction: 'inbound' | 'outbound'
+    type: string
+    createdAt: string
+}
+
+const PREVIEW_MEDIA_LABELS: Record<string, string> = {
+    image:    '🖼️ Imagem',
+    audio:    '🎵 Áudio',
+    video:    '🎬 Vídeo',
+    document: '📄 Documento',
+    sticker:  '🎭 Sticker',
+}
+
+function ConversationPreview({
+    contactId,
+    contactName,
+    avatarUrl,
+}: {
+    contactId: string
+    contactName: string
+    avatarUrl?: string | null
+}) {
+    const [msgs, setMsgs]       = useState<PreviewMsg[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        setLoading(true)
+        api.get('/messages', { params: { contactId, limit: 10 } })
+            .then(({ data }) => {
+                // a API retorna os mais recentes primeiro; exibe mais antigo → mais novo
+                const raw: PreviewMsg[] = (data.messages ?? []).slice().reverse()
+                setMsgs(raw)
+            })
+            .catch(() => setMsgs([]))
+            .finally(() => setLoading(false))
+    }, [contactId])
+
+    function fmtTime(dateStr: string) {
+        return new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    }
+
+    return (
+        <div className="w-72 rounded-xl border bg-background shadow-lg overflow-hidden">
+            {/* Cabeçalho */}
+            <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-muted/30">
+                {avatarUrl ? (
+                    <img src={avatarUrl} alt={contactName} className="h-7 w-7 rounded-full object-cover shrink-0" />
+                ) : (
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary text-xs font-semibold">
+                        {contactName.charAt(0).toUpperCase()}
+                    </div>
+                )}
+                <div>
+                    <p className="text-xs font-semibold leading-none">{contactName}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Últimas 10 mensagens</p>
+                </div>
+            </div>
+
+            {/* Mensagens */}
+            <div className="flex flex-col gap-1.5 p-2.5 max-h-64 overflow-y-auto">
+                {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                ) : msgs.length === 0 ? (
+                    <p className="text-center text-xs text-muted-foreground py-8">Sem mensagens</p>
+                ) : (
+                    msgs.map((msg) => {
+                        const isInbound = msg.direction === 'inbound'
+                        const label     = PREVIEW_MEDIA_LABELS[msg.type]
+                        const text      = label ?? (msg.content.slice(0, 120) + (msg.content.length > 120 ? '…' : ''))
+                        return (
+                            <div key={msg.id} className={cn('flex', isInbound ? 'justify-start' : 'justify-end')}>
+                                <div className={cn(
+                                    'max-w-[82%] rounded-lg px-2.5 py-1.5 text-xs leading-snug',
+                                    isInbound
+                                        ? 'bg-muted text-foreground rounded-tl-none'
+                                        : 'bg-primary text-primary-foreground rounded-tr-none'
+                                )}>
+                                    <p className="break-words whitespace-pre-wrap">{text}</p>
+                                    <p className={cn(
+                                        'text-[10px] mt-0.5 text-right tabular-nums',
+                                        isInbound ? 'text-muted-foreground' : 'text-primary-foreground/70'
+                                    )}>
+                                        {fmtTime(msg.createdAt)}
+                                    </p>
+                                </div>
+                            </div>
+                        )
+                    })
+                )}
+            </div>
+        </div>
+    )
+}
+
 // ─── ContactItem ──────────────────────────────────────────────────────────────
 
 function ContactItem({
@@ -295,9 +399,12 @@ function ContactItem({
     )
 
     return (
-        <ContextMenu>
-            <ContextMenuTrigger asChild>{inner}</ContextMenuTrigger>
-            <ContextMenuContent className="w-56">
+        <HoverCard openDelay={500} closeDelay={100}>
+            <ContextMenu>
+                <HoverCardTrigger asChild>
+                    <ContextMenuTrigger asChild>{inner}</ContextMenuTrigger>
+                </HoverCardTrigger>
+                <ContextMenuContent className="w-56">
                 <ContextMenuItem className="gap-2 text-xs" onClick={() => onContextAction('view', contact)}>
                     <User className="h-3.5 w-3.5" />Ver detalhes do contato
                 </ContextMenuItem>
@@ -400,8 +507,16 @@ function ContactItem({
                         <CheckCircle2 className="h-3.5 w-3.5" />Resolver conversa
                     </ContextMenuItem>
                 )}
-            </ContextMenuContent>
-        </ContextMenu>
+                </ContextMenuContent>
+            </ContextMenu>
+            <HoverCardContent side="right" align="start" className="p-0 w-auto border-0 shadow-none bg-transparent">
+                <ConversationPreview
+                    contactId={contact.id}
+                    contactName={contact.name}
+                    avatarUrl={contact.avatarUrl}
+                />
+            </HoverCardContent>
+        </HoverCard>
     )
 }
 
@@ -413,6 +528,7 @@ function ConversationList({
     contacts, noChannelContacts, noChannelLoading, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
     channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole, members,
     advancedFilterConditions, onOpenAdvancedFilters, loadMore, hasMore, loadingMore, canAssignConversations,
+    teams, activeTeamId, onTeamChange,
 }: {
     contacts: Contact[]
     noChannelContacts: Contact[]
@@ -440,6 +556,9 @@ function ConversationList({
     hasMore?: boolean
     loadingMore?: boolean
     canAssignConversations?: boolean
+    teams: TeamRef[]
+    activeTeamId: string | null
+    onTeamChange: (teamId: string | null) => void
 }) {
     const [search, setSearch] = useState('')
     const [modalContact, setModalContact] = useState<Contact | null>(null)
@@ -659,12 +778,19 @@ function ConversationList({
         const hasUnread = unreadIds.has(c.id)
         if (status !== 'all' && !hasUnread && (c.convStatus ?? 'open') !== status) return false
 
-        // Filtro de tab (minhas/não atribuídas/todas/sem canal)
-        if (tab === 'mine' && c.assignedToId !== userId) return false
-        if (tab === 'unassigned' && c.assignedToId != null) return false
-        // IMPORTANTE: Contatos sem canal aparecem APENAS na tab "Sem Canal"
-        // Nas outras tabs, esconde contatos sem canal
-        if (tab !== 'nochannel' && c.channelId == null) return false
+        // Filtro de time (quando um time está selecionado)
+        if (activeTeamId) {
+            if (c.teamId !== activeTeamId) return false
+            // No modo time, esconde contatos sem canal
+            if (c.channelId == null) return false
+        } else {
+            // Filtro de tab normal (minhas/não atribuídas/todas/sem canal)
+            if (tab === 'mine' && c.assignedToId !== userId) return false
+            if (tab === 'unassigned' && c.assignedToId != null) return false
+            // IMPORTANTE: Contatos sem canal aparecem APENAS na tab "Sem Canal"
+            // Nas outras tabs, esconde contatos sem canal
+            if (tab !== 'nochannel' && c.channelId == null) return false
+        }
 
         // Filtro de tag
         if (tagFilter) {
@@ -781,26 +907,56 @@ function ConversationList({
 
             {/* Sub-tabs + tag filter */}
             <div className="flex items-start gap-1 border-b px-3 py-1.5 min-h-[36px]">
-                {/* Apenas admin e owner podem ver as tabs "Todos", "Não atribuídos" e "Sem Canal" */}
+                {/* Tabs: Minhas | Times | [admin: Não atrib., Todos, Sem Canal] */}
                 <div className="flex items-center gap-1 flex-1 min-w-0 flex-wrap">
-                    {(['mine', 'unassigned', 'all', 'nochannel'] as ConvTab[])
+                    {/* Tab "Minhas" */}
+                    <button
+                        onClick={() => { onTabChange('mine'); onTeamChange(null) }}
+                        className={cn(
+                            'rounded px-2 py-1 text-xs font-medium transition-colors flex items-center gap-1 whitespace-nowrap shrink-0',
+                            tab === 'mine' && !activeTeamId ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+                        )}
+                    >
+                        Minhas
+                    </button>
+
+                    {/* Tabs de times do usuário */}
+                    {teams.map((team) => {
+                        const isActive = activeTeamId === team.id
+                        return (
+                            <button
+                                key={team.id}
+                                onClick={() => onTeamChange(isActive ? null : team.id)}
+                                className={cn(
+                                    'rounded px-2 py-1 text-xs font-medium transition-colors flex items-center gap-1 whitespace-nowrap shrink-0',
+                                    isActive ? 'text-white' : 'text-muted-foreground hover:text-foreground'
+                                )}
+                                style={isActive
+                                    ? { backgroundColor: team.color }
+                                    : undefined
+                                }
+                            >
+                                <Users className="h-3 w-3" />
+                                {team.name}
+                            </button>
+                        )
+                    })}
+
+                    {/* Tabs admin/owner */}
+                    {(['unassigned', 'all', 'nochannel'] as ConvTab[])
                         .filter((t) => {
-                            // Remove a tab "all" para membros que não são admin/owner
                             if (t === 'all' && userRole !== 'admin' && userRole !== 'owner') return false
-                            // Remove a tab "unassigned" para membros que não são admin/owner
                             if (t === 'unassigned' && userRole !== 'admin' && userRole !== 'owner') return false
-                            // Remove a tab "nochannel" para membros que não são admin/owner
                             if (t === 'nochannel' && userRole !== 'admin' && userRole !== 'owner') return false
                             return true
                         })
                         .map((t) => (
-                            <button key={t} onClick={() => onTabChange(t)}
+                            <button key={t} onClick={() => { onTabChange(t); onTeamChange(null) }}
                                 className={cn(
                                     'rounded px-2 py-1 text-xs font-medium transition-colors flex items-center gap-1 whitespace-nowrap shrink-0',
-                                    tab === t ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+                                    tab === t && !activeTeamId ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
                                 )}
                             >
-                                {t === 'mine' && 'Minhas'}
                                 {t === 'unassigned' && 'Não atrib.'}
                                 {t === 'all' && 'Todos'}
                                 {t === 'nochannel' && (
@@ -2425,6 +2581,8 @@ function ConversationsPageInner() {
     const rawMembersRef = useRef<RawMember[]>([])
     const [canAssignConversations, setCanAssignConversations] = useState(false)
     const [tags, setTags]             = useState<OrgTagRef[]>([])
+    const [teams, setTeams]           = useState<TeamRef[]>([])
+    const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
     const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null>(null)
     const [notifyNewMessage, setNotifyNewMessage] = useState(true)
@@ -2502,6 +2660,13 @@ function ConversationsPageInner() {
         } catch { setTags([]) }
     }, [])
 
+    const loadTeams = useCallback(async () => {
+        try {
+            const { data } = await api.get('/teams/mine')
+            setTeams(data)
+        } catch { setTeams([]) }
+    }, [])
+
     const loadNotificationSettings = useCallback(async () => {
         try {
             const { data } = await api.get('/agent/members')
@@ -2533,12 +2698,13 @@ function ConversationsPageInner() {
             loadChannels()
             loadMembers()
             loadTags()
+            loadTeams()
             loadNotificationSettings()
             if (isAdminOrOwner) {
                 loadNoChannelContacts()
             }
         }
-    }, [orgId, tagFilter, loadContacts, loadChannels, loadMembers, loadTags, loadNotificationSettings, loadNoChannelContacts, isAdminOrOwner])
+    }, [orgId, tagFilter, loadContacts, loadChannels, loadMembers, loadTags, loadTeams, loadNotificationSettings, loadNoChannelContacts, isAdminOrOwner])
 
     // Auto-seleciona contato pelo contactId da URL
     useEffect(() => {
@@ -2605,6 +2771,9 @@ function ConversationsPageInner() {
     }, [])
 
     const handleConvUpdated = useCallback((ev: SseConvUpdated) => {
+        const teamPatch = ev.teamId !== undefined
+            ? { teamId: ev.teamId, team: ev.teamId ? { id: ev.teamId, name: ev.teamName ?? '', color: '' } : null }
+            : {}
         setContacts((prev) => prev.map((c) => {
             if (c.id !== ev.contactId) return c
             return {
@@ -2614,6 +2783,7 @@ function ConversationsPageInner() {
                 assignedTo: ev.assignedToName
                     ? { id: ev.assignedToId ?? '', name: ev.assignedToName, image: ev.assignedToImage ?? null }
                     : null,
+                ...teamPatch,
             }
         }))
         setSelected((prev) => {
@@ -2625,6 +2795,7 @@ function ConversationsPageInner() {
                 assignedTo: ev.assignedToName
                     ? { id: ev.assignedToId ?? '', name: ev.assignedToName, image: ev.assignedToImage ?? null }
                     : null,
+                ...teamPatch,
             }
         })
     }, [])
@@ -2733,7 +2904,7 @@ function ConversationsPageInner() {
                     status={status}
                     tab={tab}
                     onStatusChange={setStatus}
-                    onTabChange={setTab}
+                    onTabChange={(t) => { setTab(t); setActiveTeamId(null) }}
                     channelFilter={channelFilter}
                     userId={userId}
                     unreadIds={unreadIds}
@@ -2750,6 +2921,9 @@ function ConversationsPageInner() {
                     loadMore={loadMoreContacts}
                     hasMore={contactsHasMore}
                     loadingMore={loadingMore}
+                    teams={teams}
+                    activeTeamId={activeTeamId}
+                    onTeamChange={setActiveTeamId}
                 />
                 <div className="flex flex-1 overflow-hidden">
                     {selected && orgId

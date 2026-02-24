@@ -6,7 +6,7 @@ import type { EditorRef } from 'react-email-editor'
 import {
     Settings, Users, Building2, Loader2, Trash2, ShieldCheck, Tag, Plus, X, Facebook, Eye, EyeOff, Copy, Check, MessageCircle, Download, Upload, Link2, ImageOff,
     UserPlus, Mail, KeyRound, Shield, ShieldAlert, UserCog, MoreHorizontal, CheckCircle2, Clock, Search, ChevronDown,
-    Layers, Lock, Pencil, MessageSquare, BarChart2, Cog, UserCheck, Megaphone, Wifi, Bot,
+    Layers, Lock, Pencil, MessageSquare, BarChart2, Cog, UserCheck, Megaphone, Wifi, Bot, UsersRound, UserMinus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,7 +31,24 @@ import { toast } from 'sonner'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'organization' | 'members' | 'roles' | 'tags' | 'facebook' | 'appearance' | 'email-templates' | 'assignments'
+type Tab = 'profile' | 'organization' | 'members' | 'roles' | 'tags' | 'teams' | 'facebook' | 'appearance' | 'email-templates' | 'assignments'
+
+type OrgTeam = {
+    id: string
+    name: string
+    description?: string | null
+    color: string
+    createdAt: string
+    members: Array<{
+        id: string
+        memberId: string
+        member: {
+            id: string
+            role: string
+            user: { id: string; name: string; email: string; image?: string | null }
+        }
+    }>
+}
 
 type OrgTag = {
     id: string
@@ -3362,6 +3379,355 @@ function AssignmentsTab({ org }: { org: Org }) {
     )
 }
 
+// ─── Aba: Times ────────────────────────────────────────────────────────────────
+
+const COLOR_PRESETS = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
+
+function TeamsTab({ org }: { org: Org }) {
+    const [teams, setTeams] = useState<OrgTeam[]>([])
+    const [members, setMembers] = useState<Member[]>([])
+    const [loading, setLoading] = useState(true)
+    const [creating, setCreating] = useState(false)
+    const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [editingId, setEditingId] = useState<string | null>(null)
+
+    // Form de criação
+    const [newName, setNewName] = useState('')
+    const [newDesc, setNewDesc] = useState('')
+    const [newColor, setNewColor] = useState('#6366f1')
+
+    // Dialog de membros
+    const [memberDialog, setMemberDialog] = useState<{ open: boolean; team: OrgTeam | null }>({ open: false, team: null })
+    const [addingMemberId, setAddingMemberId] = useState<string | null>(null)
+    const [removingMemberId, setRemovingMemberId] = useState<string | null>(null)
+
+    // Form de edição inline
+    const [editName, setEditName] = useState('')
+    const [editColor, setEditColor] = useState('#6366f1')
+
+    const load = useCallback(() => {
+        setLoading(true)
+        Promise.all([
+            api.get('/teams'),
+            api.get('/users'),
+        ]).then(([teamsRes, membersRes]) => {
+            setTeams(teamsRes.data)
+            setMembers(membersRes.data ?? [])
+        }).catch(() => null).finally(() => setLoading(false))
+    }, [org.id])
+
+    useEffect(() => { load() }, [load])
+
+    async function handleCreate() {
+        if (!newName.trim()) return
+        setCreating(true)
+        try {
+            await api.post('/teams', { name: newName.trim(), description: newDesc.trim() || undefined, color: newColor })
+            setNewName(''); setNewDesc(''); setNewColor('#6366f1')
+            toast.success('Time criado.')
+            load()
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erro ao criar time.')
+        } finally {
+            setCreating(false)
+        }
+    }
+
+    async function handleDelete(id: string) {
+        setDeletingId(id)
+        try {
+            await api.delete(`/teams/${id}`)
+            setTeams((prev) => prev.filter((t) => t.id !== id))
+            toast.success('Time removido.')
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erro ao remover time.')
+        } finally {
+            setDeletingId(null)
+        }
+    }
+
+    async function handleSaveEdit(id: string) {
+        try {
+            await api.patch(`/teams/${id}`, { name: editName.trim(), color: editColor })
+            setTeams((prev) => prev.map((t) => t.id === id ? { ...t, name: editName.trim(), color: editColor } : t))
+            setEditingId(null)
+            toast.success('Time atualizado.')
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erro ao atualizar time.')
+        }
+    }
+
+    async function handleAddMember(teamId: string, memberId: string) {
+        setAddingMemberId(memberId)
+        try {
+            await api.post(`/teams/${teamId}/members`, { memberId })
+            load()
+            toast.success('Membro adicionado.')
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erro ao adicionar membro.')
+        } finally {
+            setAddingMemberId(null)
+        }
+    }
+
+    async function handleRemoveMember(teamId: string, memberId: string) {
+        setRemovingMemberId(memberId)
+        try {
+            await api.delete(`/teams/${teamId}/members/${memberId}`)
+            load()
+            toast.success('Membro removido.')
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : 'Erro ao remover membro.')
+        } finally {
+            setRemovingMemberId(null)
+        }
+    }
+
+    // Abre dialog de membros com o time atualizado
+    function openMemberDialog(team: OrgTeam) {
+        const updated = teams.find((t) => t.id === team.id) ?? team
+        setMemberDialog({ open: true, team: updated })
+    }
+
+    // Sincroniza dialog com teams state
+    const dialogTeam = memberDialog.team
+        ? teams.find((t) => t.id === memberDialog.team!.id) ?? memberDialog.team
+        : null
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-lg font-semibold">Times</h2>
+                <p className="text-sm text-muted-foreground">
+                    Organize agentes em times e atribua conversas ao time correspondente.
+                </p>
+            </div>
+            <Separator />
+
+            {/* Criar time */}
+            <div className="space-y-3 max-w-lg">
+                <p className="text-sm font-medium">Criar novo time</p>
+                <div className="flex gap-2">
+                    <Input
+                        placeholder="Nome do time..."
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                        className="flex-1"
+                    />
+                    <Button onClick={handleCreate} disabled={creating || !newName.trim()}>
+                        {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    </Button>
+                </div>
+                <Input
+                    placeholder="Descrição (opcional)..."
+                    value={newDesc}
+                    onChange={(e) => setNewDesc(e.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Cor:</span>
+                    {COLOR_PRESETS.map((c) => (
+                        <button
+                            key={c}
+                            className={cn('h-5 w-5 rounded-full border-2 transition-transform', newColor === c ? 'border-foreground scale-110' : 'border-transparent')}
+                            style={{ backgroundColor: c }}
+                            onClick={() => setNewColor(c)}
+                        />
+                    ))}
+                </div>
+            </div>
+
+            <Separator />
+
+            {/* Lista de times */}
+            {loading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando times...
+                </div>
+            ) : teams.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum time criado ainda.</p>
+            ) : (
+                <div className="space-y-2 max-w-2xl">
+                    {teams.map((team) => (
+                        <div key={team.id} className="flex items-center gap-3 rounded-lg border p-3">
+                            {/* Color dot */}
+                            <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: team.color }} />
+
+                            {/* Nome / edição */}
+                            {editingId === team.id ? (
+                                <div className="flex-1 flex items-center gap-2">
+                                    <Input
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        className="h-7 text-sm flex-1"
+                                        autoFocus
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(team.id)}
+                                    />
+                                    {COLOR_PRESETS.map((c) => (
+                                        <button
+                                            key={c}
+                                            className={cn('h-4 w-4 rounded-full border-2 shrink-0', editColor === c ? 'border-foreground' : 'border-transparent')}
+                                            style={{ backgroundColor: c }}
+                                            onClick={() => setEditColor(c)}
+                                        />
+                                    ))}
+                                    <Button size="sm" className="h-7 text-xs px-2" onClick={() => handleSaveEdit(team.id)}>
+                                        <Check className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => setEditingId(null)}>
+                                        <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{team.name}</p>
+                                    {team.description && (
+                                        <p className="text-xs text-muted-foreground truncate">{team.description}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Membros badge */}
+                            {editingId !== team.id && (
+                                <button
+                                    onClick={() => openMemberDialog(team)}
+                                    className="flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                                >
+                                    <UsersRound className="h-3 w-3" />
+                                    {team.members.length} membro{team.members.length !== 1 ? 's' : ''}
+                                </button>
+                            )}
+
+                            {/* Ações */}
+                            {editingId !== team.id && (
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => {
+                                            setEditingId(team.id)
+                                            setEditName(team.name)
+                                            setEditColor(team.color)
+                                        }}
+                                    >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                        onClick={() => handleDelete(team.id)}
+                                        disabled={deletingId === team.id}
+                                    >
+                                        {deletingId === team.id
+                                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            : <Trash2 className="h-3.5 w-3.5" />
+                                        }
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Dialog de membros */}
+            <Dialog open={memberDialog.open} onOpenChange={(v) => !v && setMemberDialog({ open: false, team: null })}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: dialogTeam?.color }} />
+                            {dialogTeam?.name} — Membros
+                        </DialogTitle>
+                        <DialogDescription>
+                            Gerencie quem faz parte deste time.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {dialogTeam && (
+                        <div className="space-y-4 py-2">
+                            {/* Membros atuais */}
+                            {dialogTeam.members.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">Nenhum membro neste time.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No time</p>
+                                    {dialogTeam.members.map((tm) => (
+                                        <div key={tm.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
+                                            <Avatar className="h-6 w-6">
+                                                {tm.member.user.image && <AvatarImage src={tm.member.user.image} />}
+                                                <AvatarFallback className="text-[9px]">
+                                                    {tm.member.user.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm truncate">{tm.member.user.name}</p>
+                                                <p className="text-xs text-muted-foreground truncate">{tm.member.user.email}</p>
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-destructive hover:text-destructive shrink-0"
+                                                disabled={removingMemberId === tm.memberId}
+                                                onClick={() => handleRemoveMember(dialogTeam.id, tm.memberId)}
+                                            >
+                                                {removingMemberId === tm.memberId
+                                                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                                                    : <UserMinus className="h-3.5 w-3.5" />
+                                                }
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Membros disponíveis para adicionar */}
+                            {(() => {
+                                const inTeamIds = new Set(dialogTeam.members.map((tm) => tm.memberId))
+                                const available = members.filter((m) => !inTeamIds.has(m.id))
+                                if (available.length === 0) return null
+                                return (
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Adicionar membro</p>
+                                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                                            {available.map((m) => (
+                                                <div key={m.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                                                    <Avatar className="h-6 w-6">
+                                                        {m.user.image && <AvatarImage src={m.user.image} />}
+                                                        <AvatarFallback className="text-[9px]">
+                                                            {m.user.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm truncate">{m.user.name}</p>
+                                                    </div>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-6 text-xs px-2 shrink-0"
+                                                        disabled={addingMemberId === m.id}
+                                                        onClick={() => handleAddMember(dialogTeam.id, m.id)}
+                                                    >
+                                                        {addingMemberId === m.id
+                                                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                                                            : <UserPlus className="h-3 w-3" />
+                                                        }
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )
+                            })()}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </div>
+    )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -3438,6 +3804,14 @@ export default function SettingsPage() {
                         onClick={() => setTab('roles')}
                     />
                 )}
+                {canMembers && (
+                    <SidebarItem
+                        icon={UsersRound}
+                        label="Times"
+                        active={tab === 'teams'}
+                        onClick={() => setTab('teams')}
+                    />
+                )}
                 {canTags && (
                     <SidebarItem
                         icon={Tag}
@@ -3494,6 +3868,7 @@ export default function SettingsPage() {
                         {tab === 'members' && (canMembers ? <MembersTab org={org} currentUserId={currentUserId} /> : <NoPermission />)}
                         {tab === 'roles' && (canMembers ? <RolesTab org={org} myRole={myRole} /> : <NoPermission />)}
                         {tab === 'tags' && (canTags ? <TagsTab org={org} /> : <NoPermission />)}
+                        {tab === 'teams' && (canMembers ? <TeamsTab org={org} /> : <NoPermission />)}
                         {tab === 'facebook' && (canSettings ? <FacebookTab org={org} onSaved={(updated) => setOrg((prev) => prev ? { ...prev, ...updated } : updated)} /> : <NoPermission />)}
                         {tab === 'appearance' && (canSettings ? <AppearanceTab org={org} onSaved={(updated) => setOrg((prev) => prev ? { ...prev, ...updated } : updated)} /> : <NoPermission />)}
                         {tab === 'email-templates' && (canSettings ? <EmailTemplatesTab org={org} /> : <NoPermission />)}
