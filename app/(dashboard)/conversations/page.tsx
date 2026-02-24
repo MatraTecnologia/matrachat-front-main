@@ -38,6 +38,7 @@ import { toast } from 'sonner'
 import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 import { usePresenceContext } from '@/contexts/presence-context'
 import { AdvancedFilters, type FilterCondition } from '@/components/AdvancedFilters'
+import { TemplateAutocomplete } from '@/components/TemplateAutocomplete'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -1140,6 +1141,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [assigning, setAssigning] = useState(false)
     const [resolving, setResolving] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const textareaRef = useRef<HTMLTextAreaElement>(null)
 
     const defaultChannel = contact.channel?.type === 'whatsapp' ? contact.channel : null
     const [selectedChannel, setSelectedChannel] = useState<ChannelRef | null>(defaultChannel)
@@ -2048,8 +2050,15 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 />
                 <div className="flex gap-2 items-end">
                     <div className="flex-1 relative">
+                        <TemplateAutocomplete
+                            value={reply}
+                            contact={contact}
+                            onSelect={setReply}
+                            textareaRef={textareaRef}
+                        />
                         <Textarea
-                            placeholder={replyType === 'reply' ? 'Digite sua mensagem...' : 'Nota interna (visível apenas para a equipe)...'}
+                            ref={textareaRef}
+                            placeholder={replyType === 'reply' ? 'Digite sua mensagem... (use "/" para templates)' : 'Nota interna (visível apenas para a equipe)...'}
                             className={cn('min-h-[80px] resize-none pr-10 text-sm', replyType === 'note' && 'bg-amber-50 border-amber-200')}
                             value={reply}
                             onChange={(e) => setReply(e.target.value)}
