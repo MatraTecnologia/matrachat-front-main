@@ -1140,6 +1140,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [sending, setSending]     = useState(false)
     const [assigning, setAssigning] = useState(false)
     const [resolving, setResolving] = useState(false)
+    const [syncingMsgs, setSyncingMsgs] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -1231,19 +1232,11 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         }))
     }
 
-    // Reload messages when contact changes
-    useEffect(() => {
-        setSelectedChannel(contact.channel?.type === 'whatsapp' ? contact.channel : null)
-        setContactTags((contact.tags ?? []).map((t) => t.tag))
-        setReply('')
+    function loadMessages(contactId: string) {
         setLoadingMsgs(true)
         setHasMore(false)
         oldestDateRef.current = null
-
-        // Reset contador de mensagens ao trocar de contato
-        messageCountRef.current = 0
-
-        api.get('/messages', { params: { contactId: contact.id, limit: 50 } })
+        api.get('/messages', { params: { contactId, limit: 50 } })
             .then(({ data }) => {
                 const msgs = parseMessages(data.messages)
                 setMessages(msgs)
@@ -1252,6 +1245,15 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             })
             .catch(() => setMessages([]))
             .finally(() => setLoadingMsgs(false))
+    }
+
+    // Reload messages when contact changes
+    useEffect(() => {
+        setSelectedChannel(contact.channel?.type === 'whatsapp' ? contact.channel : null)
+        setContactTags((contact.tags ?? []).map((t) => t.tag))
+        setReply('')
+        messageCountRef.current = 0
+        loadMessages(contact.id)
 
         // Ao abrir uma conversa pendente, marca como "open" automaticamente
         if (contact.convStatus === 'pending') {
@@ -1440,6 +1442,25 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             await api.patch(`/contacts/${contact.id}/open`)
             onContactUpdated({ id: contact.id, convStatus: 'open' })
         } catch { /* silencioso */ }
+    }
+
+    async function handleSyncMessages() {
+        setSyncingMsgs(true)
+        try {
+            const { data } = await api.post(`/contacts/${contact.id}/sync-messages`)
+            if (data.imported > 0) {
+                toast.success(`${data.imported} nova${data.imported !== 1 ? 's' : ''} mensagem${data.imported !== 1 ? 'ns' : ''} sincronizada${data.imported !== 1 ? 's' : ''}.`)
+                // Recarrega mensagens do chat
+                loadMessages(contact.id)
+            } else {
+                toast.info('Nenhuma mensagem nova encontrada.')
+            }
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+            toast.error(msg ?? 'Erro ao sincronizar mensagens.')
+        } finally {
+            setSyncingMsgs(false)
+        }
     }
 
     const contactNumber = contact.externalId ?? contact.phone?.replace(/^\+/, '') ?? null
@@ -1812,6 +1833,22 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                             >
                                 <Tag className="h-4 w-4" />Adicionar etiqueta
                             </DropdownMenuItem>
+                            {contact.channel?.type === 'whatsapp' && contact.externalId && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        className="gap-2"
+                                        onClick={handleSyncMessages}
+                                        disabled={syncingMsgs}
+                                    >
+                                        {syncingMsgs
+                                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                                            : <RefreshCw className="h-4 w-4" />
+                                        }
+                                        Sincronizar mensagens
+                                    </DropdownMenuItem>
+                                </>
+                            )}
                             <DropdownMenuSeparator />
                             {contact.convStatus === 'resolved' ? (
                                 <DropdownMenuItem
