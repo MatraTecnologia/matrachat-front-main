@@ -27,6 +27,7 @@ import {
     ContextMenuSeparator, ContextMenuTrigger, ContextMenuSub,
     ContextMenuSubTrigger, ContextMenuSubContent,
 } from '@/components/ui/context-menu'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
