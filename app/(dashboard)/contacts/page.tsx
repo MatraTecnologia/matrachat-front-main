@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
     Users, Plus, Search, Loader2, Pencil, Trash2,
     Phone, Mail, ChevronLeft, ChevronRight, RefreshCw,
-    MessageCircle, Globe, Hash,
+    MessageCircle, Globe, Hash, GitMerge,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -242,6 +242,9 @@ export default function ContactsPage() {
     const [loading, setLoading]           = useState(true)
     const [waChannels, setWaChannels]     = useState<ChannelRef[]>([])
     const [syncing, setSyncing]           = useState(false)
+    const [unifying, setUnifying]         = useState(false)
+    const [unifyOpen, setUnifyOpen]       = useState(false)
+    const [unifyResult, setUnifyResult]   = useState<{ mergedGroups: number; removedContacts: number } | null>(null)
     const [formOpen, setFormOpen]         = useState(false)
     const [editContact, setEditContact]   = useState<Contact | undefined>()
     const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null)
@@ -271,6 +274,18 @@ export default function ContactsPage() {
         const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 350)
         return () => clearTimeout(t)
     }, [searchInput])
+
+    async function handleUnify() {
+        setUnifying(true)
+        try {
+            const { data } = await api.post('/contacts/unify')
+            setUnifyResult(data)
+            if (orgId) loadContacts(orgId, search, page)
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Erro ao unificar contatos.')
+            setUnifyOpen(false)
+        } finally { setUnifying(false) }
+    }
 
     async function handleSync(channelId: string, channelName: string) {
         setSyncing(true)
@@ -336,6 +351,10 @@ export default function ContactsPage() {
                             </DropdownMenuContent>
                         </DropdownMenu>
                     )}
+                    <Button variant="outline" onClick={() => { setUnifyResult(null); setUnifyOpen(true) }} disabled={!orgId || unifying}>
+                        {unifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GitMerge className="mr-2 h-4 w-4" />}
+                        Unificar
+                    </Button>
                     <Button onClick={() => { setEditContact(undefined); setFormOpen(true) }} disabled={!orgId}>
                         <Plus className="mr-2 h-4 w-4" />Novo contato
                     </Button>
@@ -431,6 +450,60 @@ export default function ContactsPage() {
                         <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDeleteConfirm}>
                             Remover
                         </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Dialog Unificar */}
+            <AlertDialog open={unifyOpen} onOpenChange={(v) => { if (!unifying) setUnifyOpen(v) }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <GitMerge className="h-5 w-5 text-primary" />
+                            {unifyResult ? 'Unificação concluída' : 'Unificar contatos duplicados'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div className="space-y-2 text-sm text-muted-foreground">
+                                {unifyResult ? (
+                                    unifyResult.mergedGroups === 0 ? (
+                                        <p>Nenhum contato duplicado encontrado. Tudo já está unificado!</p>
+                                    ) : (
+                                        <div className="space-y-1">
+                                            <p className="font-medium text-foreground">
+                                                {unifyResult.mergedGroups} grupo{unifyResult.mergedGroups !== 1 ? 's' : ''} unificado{unifyResult.mergedGroups !== 1 ? 's' : ''}.
+                                            </p>
+                                            <p>
+                                                {unifyResult.removedContacts} contato{unifyResult.removedContacts !== 1 ? 's' : ''} duplicado{unifyResult.removedContacts !== 1 ? 's' : ''} removido{unifyResult.removedContacts !== 1 ? 's' : ''}.
+                                            </p>
+                                            <p className="text-xs">As mensagens e tags foram transferidas para o contato com canal vinculado.</p>
+                                        </div>
+                                    )
+                                ) : (
+                                    <>
+                                        <p>
+                                            Contatos com o mesmo número de telefone serão unificados.
+                                        </p>
+                                        <p>
+                                            O contato vinculado ao canal WhatsApp será mantido como principal. As mensagens, tags e campanhas dos duplicados serão transferidas para ele.
+                                        </p>
+                                        <p className="font-medium text-foreground">Esta ação não pode ser desfeita.</p>
+                                    </>
+                                )}
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        {unifyResult ? (
+                            <AlertDialogAction onClick={() => setUnifyOpen(false)}>Fechar</AlertDialogAction>
+                        ) : (
+                            <>
+                                <AlertDialogCancel disabled={unifying}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleUnify} disabled={unifying}>
+                                    {unifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Unificar agora
+                                </AlertDialogAction>
+                            </>
+                        )}
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
