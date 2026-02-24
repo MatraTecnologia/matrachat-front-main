@@ -24,7 +24,7 @@ type MessageTemplate = {
 }
 
 export default function TemplatesPage() {
-    const { permissions: perms } = usePermissions()
+    const { data: perms } = usePermissions()
     const [templates, setTemplates] = useState<MessageTemplate[]>([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
