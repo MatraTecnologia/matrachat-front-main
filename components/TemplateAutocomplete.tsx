@@ -21,7 +21,7 @@ interface TemplateAutocompleteProps {
     value: string
     contact: Contact | null
     onSelect: (content: string) => void
-    textareaRef: React.RefObject<HTMLTextAreaElement>
+    textareaRef: React.RefObject<HTMLTextAreaElement | null>
 }
 
 export function TemplateAutocomplete({
