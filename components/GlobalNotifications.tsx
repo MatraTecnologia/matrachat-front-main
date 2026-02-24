@@ -1,11 +1,10 @@
 'use client'
 
-import { useRef, useState, useCallback, useEffect } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
-import type { SseNewMessage } from '@/hooks/useAgentSse'
-import { usePresenceContext } from '@/contexts/presence-context'
+import { useAgentSse, type SseNewMessage } from '@/hooks/useAgentSse'
 import { api } from '@/lib/api'
 
 // ─── Mini reply form rendered inside the Sonner toast ────────────────────────

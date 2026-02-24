@@ -448,6 +448,7 @@ function ConversationList({
 
     // Sync histórico completo
     const [syncingHistory, setSyncingHistory] = useState(false)
+    const [isSyncPolling, setIsSyncPolling]   = useState(false)
     const [syncProgress, setSyncProgress] = useState(0)
     const [syncResult, setSyncResult] = useState<{ jobId: string } | null>(null)
     const syncTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -458,8 +459,41 @@ function ConversationList({
         return () => { if (syncPollRef.current) clearInterval(syncPollRef.current) }
     }, [])
 
+    function startSyncPoll(jobId: string, toastId: string | number) {
+        if (syncPollRef.current) clearInterval(syncPollRef.current)
+        setIsSyncPolling(true)
+        let polls = 0
+        syncPollRef.current = setInterval(async () => {
+            polls++
+            if (polls > 100) { // ~5 minutos máximo
+                clearInterval(syncPollRef.current!)
+                syncPollRef.current = null
+                setIsSyncPolling(false)
+                toast.warning('Sincronização ainda em andamento. Verifique o Monitor de Filas.', { id: toastId })
+                syncToastIdRef.current = null
+                return
+            }
+            try {
+                const { data: jobData } = await api.get(`/queue/jobs/${jobId}`)
+                if (jobData.state === 'completed') {
+                    clearInterval(syncPollRef.current!)
+                    syncPollRef.current = null
+                    setIsSyncPolling(false)
+                    toast.success('Histórico sincronizado com sucesso!', { id: toastId })
+                    syncToastIdRef.current = null
+                } else if (jobData.state === 'failed') {
+                    clearInterval(syncPollRef.current!)
+                    syncPollRef.current = null
+                    setIsSyncPolling(false)
+                    toast.error('Falha na sincronização. Verifique o Monitor de Filas.', { id: toastId })
+                    syncToastIdRef.current = null
+                }
+            } catch { /* ignora erros de poll */ }
+        }, 3000)
+    }
+
     async function handleSyncAllHistory() {
-        if (syncingHistory) return
+        if (syncingHistory || isSyncPolling) return
         setSyncingHistory(true)
         setSyncResult(null)
         setSyncProgress(0)
@@ -472,41 +506,22 @@ function ConversationList({
             clearInterval(syncTimerRef.current!)
             setSyncProgress(100)
             setSyncResult({ jobId: data.jobId })
-
-            // Toast persistente enquanto o job processa no Redis (filtrado pela org do usuário)
             const toastId = toast.loading('Sincronizando histórico da organização...')
             syncToastIdRef.current = toastId
-
-            // Encerra poll anterior se houver
-            if (syncPollRef.current) clearInterval(syncPollRef.current)
-
-            let polls = 0
-            const jobId = data.jobId
-            syncPollRef.current = setInterval(async () => {
-                polls++
-                if (polls > 100) { // ~5 minutos máximo
-                    clearInterval(syncPollRef.current!)
-                    toast.warning('Sincronização ainda em andamento. Verifique o Monitor de Filas.', { id: toastId })
-                    syncToastIdRef.current = null
-                    return
-                }
-                try {
-                    const { data: jobData } = await api.get(`/queue/jobs/${jobId}`)
-                    if (jobData.state === 'completed') {
-                        clearInterval(syncPollRef.current!)
-                        toast.success('Histórico sincronizado com sucesso!', { id: toastId })
-                        syncToastIdRef.current = null
-                    } else if (jobData.state === 'failed') {
-                        clearInterval(syncPollRef.current!)
-                        toast.error('Falha na sincronização. Verifique o Monitor de Filas.', { id: toastId })
-                        syncToastIdRef.current = null
-                    }
-                } catch { /* ignora erros de poll */ }
-            }, 3000)
-        } catch {
+            startSyncPoll(data.jobId, toastId)
+        } catch (err: any) {
             clearInterval(syncTimerRef.current!)
             setSyncProgress(0)
-            toast.error('Erro ao sincronizar histórico.')
+            if (err?.response?.status === 409 && err?.response?.data?.jobId) {
+                // Já há sync em andamento — apenas acompanha o job existente
+                const jobId = err.response.data.jobId
+                setSyncResult({ jobId })
+                const toastId = toast.loading('Sincronização já em andamento para esta organização...')
+                syncToastIdRef.current = toastId
+                startSyncPoll(jobId, toastId)
+            } else {
+                toast.error('Erro ao sincronizar histórico.')
+            }
         } finally {
             setSyncingHistory(false)
         }
@@ -883,10 +898,11 @@ function ConversationList({
                     ) : (
                         <button
                             onClick={handleSyncAllHistory}
-                            className="flex w-full items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                            disabled={syncingHistory || isSyncPolling}
+                            className="flex w-full items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <RefreshCw className="h-3 w-3 shrink-0" />
-                            Sincronizar histórico de instâncias
+                            <RefreshCw className={`h-3 w-3 shrink-0 ${isSyncPolling ? 'animate-spin' : ''}`} />
+                            {isSyncPolling ? 'Sincronizando...' : 'Sincronizar histórico de instâncias'}
                         </button>
                     )}
                 </div>
