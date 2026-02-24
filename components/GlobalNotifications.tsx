@@ -90,8 +90,6 @@ function ReplyForm({
 
 export function GlobalNotifications({ orgId, userId }: { orgId: string | null; userId: string | null }) {
     const pathname = usePathname()
-    const { socket } = usePresenceContext()
-
     const handleNewMessage = useCallback((ev: SseNewMessage) => {
         // Conversations page manages its own notifications — avoid duplicates
         if (pathname.startsWith('/conversations')) return
@@ -152,14 +150,7 @@ export function GlobalNotifications({ orgId, userId }: { orgId: string | null; u
         )
     }, [pathname, orgId, userId])
 
-    useEffect(() => {
-        if (!socket) return
-        const handler = (event: SseNewMessage) => {
-            if (event.type === 'new_message') handleNewMessage(event)
-        }
-        socket.on('agent_event', handler)
-        return () => { socket.off('agent_event', handler) }
-    }, [socket, handleNewMessage])
+    useAgentSse(orgId, { onNewMessage: handleNewMessage })
 
     return null
 }

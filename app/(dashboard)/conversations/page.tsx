@@ -35,7 +35,7 @@ import { Progress } from '@/components/ui/progress'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/contexts/permissions-context'
 import { NoPermission } from '@/components/no-permission'
-import type { SseNewMessage, SseConvUpdated } from '@/hooks/useAgentSse'
+import { useAgentSse, type SseNewMessage, type SseConvUpdated } from '@/hooks/useAgentSse'
 import { toast } from 'sonner'
 import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 import { usePresenceContext } from '@/contexts/presence-context'
@@ -47,7 +47,7 @@ import { TemplateAutocomplete } from '@/components/TemplateAutocomplete'
 type ChannelRef = { id: string; name: string; type: string; status: string }
 type ContactTag = { tag: { id: string; name: string; color: string } }
 type MemberRef  = { id: string; name: string; email: string; image?: string | null }
-type RawMember  = { id: string; role: string; user: { id: string; name: string; email: string; image?: string | null } }
+type RawMember  = { id: string; role: string; canAssign: boolean; user: { id: string; name: string; email: string; image?: string | null } }
 
 type Contact = {
     id: string
@@ -2613,17 +2613,8 @@ function ConversationsPageInner() {
         })
     }, [])
 
-    // ── WebSocket: recebe eventos de mensagens via Socket.io (presence-context) ───
-    const { socket } = usePresenceContext()
-    useEffect(() => {
-        if (!socket) return
-        const handler = (event: SseNewMessage | SseConvUpdated) => {
-            if (event.type === 'new_message') handleNewMessage(event as SseNewMessage)
-            else if (event.type === 'conv_updated') handleConvUpdated(event as SseConvUpdated)
-        }
-        socket.on('agent_event', handler)
-        return () => { socket.off('agent_event', handler) }
-    }, [socket, handleNewMessage, handleConvUpdated])
+    // ── WebSocket: recebe eventos de mensagens via Socket.io ──────────────────
+    useAgentSse(orgId, { onNewMessage: handleNewMessage, onConvUpdated: handleConvUpdated })
 
     // ── Contact update handler (from assign / resolve) ────────────────────────
 

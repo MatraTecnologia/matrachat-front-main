@@ -36,6 +36,7 @@ export type SseConvUpdated = {
     convStatus: string
     assignedToId: string | null
     assignedToName: string | null
+    assignedToImage?: string | null
 }
 
 export type SseUserViewing = {
