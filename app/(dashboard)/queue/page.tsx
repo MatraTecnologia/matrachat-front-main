@@ -138,7 +138,13 @@ function JobRow({ job, onRetry, onRemove }: { job: Job; status: JobStatus; onRet
 }
 
 function QueueSection({ queue, onRetry, onRemove }: { queue: QueueStats; onRetry: (id: string) => void; onRemove: (id: string) => void }) {
-    const [activeTab, setActiveTab] = useState<JobStatus>('active')
+    // Auto-seleciona o tab com jobs: active → waiting → failed → completed
+    const defaultTab: JobStatus =
+        (queue.counts.active   ?? 0) > 0 ? 'active'    :
+        (queue.counts.waiting  ?? 0) > 0 ? 'waiting'   :
+        (queue.counts.failed   ?? 0) > 0 ? 'failed'    :
+        'completed'
+    const [activeTab, setActiveTab] = useState<JobStatus>(defaultTab)
 
     const jobsMap: Record<JobStatus, Job[]> = {
         active:    queue.active,
@@ -235,6 +241,7 @@ function QueueSection({ queue, onRetry, onRemove }: { queue: QueueStats; onRetry
 export default function QueuePage() {
     const [stats, setStats] = useState<StatsResponse | null>(null)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const [autoRefresh, setAutoRefresh] = useState(true)
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
@@ -242,9 +249,11 @@ export default function QueuePage() {
         try {
             const { data } = await api.get('/queue/stats')
             setStats(data)
+            setError(null)
             setLastUpdate(new Date())
-        } catch {
-            // silencia erros durante auto-refresh
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+            setError(msg ?? 'Erro ao carregar estatísticas.')
         } finally {
             setLoading(false)
         }
@@ -324,6 +333,14 @@ export default function QueuePage() {
                 {loading && (
                     <div className="flex items-center justify-center py-16">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                )}
+
+                {/* Error */}
+                {!loading && error && (
+                    <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        <XCircle className="h-4 w-4 shrink-0" />
+                        {error}
                     </div>
                 )}
 

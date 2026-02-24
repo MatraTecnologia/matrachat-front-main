@@ -449,7 +449,7 @@ function ConversationList({
     // Sync histórico completo
     const [syncingHistory, setSyncingHistory] = useState(false)
     const [syncProgress, setSyncProgress] = useState(0)
-    const [syncResult, setSyncResult] = useState<{ messagesImported: number; contactsCreated: number } | null>(null)
+    const [syncResult, setSyncResult] = useState<{ jobId: string } | null>(null)
     const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
     async function handleSyncAllHistory() {
@@ -465,8 +465,8 @@ function ConversationList({
             const { data } = await api.post('/channels/whatsapp/sync-all-history')
             clearInterval(syncTimerRef.current!)
             setSyncProgress(100)
-            setSyncResult({ messagesImported: data.messagesImported, contactsCreated: data.contactsCreated })
-            toast.success(`Histórico sincronizado: ${data.messagesImported} mensagem(ns), ${data.contactsCreated} contato(s) criado(s).`)
+            setSyncResult({ jobId: data.jobId })
+            toast.success('Sincronização enfileirada! Acompanhe o progresso no Monitor de Filas.')
         } catch {
             clearInterval(syncTimerRef.current!)
             setSyncProgress(0)
@@ -835,7 +835,7 @@ function ConversationList({
                         <div className="flex items-center gap-2">
                             <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" />
                             <span className="text-[11px] text-muted-foreground flex-1 truncate">
-                                {syncResult.messagesImported} msg · {syncResult.contactsCreated} contato(s) novo(s)
+                                Enfileirado · job {syncResult.jobId?.slice(-6)}
                             </span>
                             <button
                                 onClick={() => setSyncResult(null)}
