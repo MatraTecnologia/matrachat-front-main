@@ -450,14 +450,20 @@ function ConversationList({
     const [syncingHistory, setSyncingHistory] = useState(false)
     const [syncProgress, setSyncProgress] = useState(0)
     const [syncResult, setSyncResult] = useState<{ jobId: string } | null>(null)
-    const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const syncTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+    const syncPollRef    = useRef<ReturnType<typeof setInterval> | null>(null)
+    const syncToastIdRef = useRef<string | number | null>(null)
+
+    useEffect(() => {
+        return () => { if (syncPollRef.current) clearInterval(syncPollRef.current) }
+    }, [])
 
     async function handleSyncAllHistory() {
         if (syncingHistory) return
         setSyncingHistory(true)
         setSyncResult(null)
         setSyncProgress(0)
-        // Progresso animado até 85% enquanto aguarda
+        // Progresso animado até 85% enquanto aguarda enfileiramento
         syncTimerRef.current = setInterval(() => {
             setSyncProgress((p) => (p < 85 ? p + 3 : p))
         }, 400)
@@ -466,7 +472,37 @@ function ConversationList({
             clearInterval(syncTimerRef.current!)
             setSyncProgress(100)
             setSyncResult({ jobId: data.jobId })
-            toast.success('Sincronização enfileirada! Acompanhe o progresso no Monitor de Filas.')
+
+            // Toast persistente enquanto o job processa no Redis (filtrado pela org do usuário)
+            const toastId = toast.loading('Sincronizando histórico da organização...')
+            syncToastIdRef.current = toastId
+
+            // Encerra poll anterior se houver
+            if (syncPollRef.current) clearInterval(syncPollRef.current)
+
+            let polls = 0
+            const jobId = data.jobId
+            syncPollRef.current = setInterval(async () => {
+                polls++
+                if (polls > 100) { // ~5 minutos máximo
+                    clearInterval(syncPollRef.current!)
+                    toast.warning('Sincronização ainda em andamento. Verifique o Monitor de Filas.', { id: toastId })
+                    syncToastIdRef.current = null
+                    return
+                }
+                try {
+                    const { data: jobData } = await api.get(`/queue/jobs/${jobId}`)
+                    if (jobData.state === 'completed') {
+                        clearInterval(syncPollRef.current!)
+                        toast.success('Histórico sincronizado com sucesso!', { id: toastId })
+                        syncToastIdRef.current = null
+                    } else if (jobData.state === 'failed') {
+                        clearInterval(syncPollRef.current!)
+                        toast.error('Falha na sincronização. Verifique o Monitor de Filas.', { id: toastId })
+                        syncToastIdRef.current = null
+                    }
+                } catch { /* ignora erros de poll */ }
+            }, 3000)
         } catch {
             clearInterval(syncTimerRef.current!)
             setSyncProgress(0)
@@ -1526,18 +1562,27 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             const { data } = await api.patch(`/contacts/${contact.id}/assign`, {
                 assignedToId: memberId,
             })
-            const member = members.find((m) => m.id === memberId) ?? null
+
             onContactUpdated({
                 id: contact.id,
                 assignedToId: data.assignedToId,
-                assignedTo: member ? { id: member.id, name: member.name, image: member.image } : null,
+                assignedTo: data.assignedTo ?? null,
             })
 
-            // Notificação de sucesso
-            if (memberId) {
-                toast.success(`Conversa atribuída a ${member?.name || 'agente'} com sucesso!`)
+            // Toast fiel ao resultado real retornado pela API
+            if (memberId !== null) {
+                if (data.assignedToId === memberId) {
+                    const name = data.assignedTo?.name ?? members.find((m) => m.id === memberId)?.name ?? 'agente'
+                    toast.success(`Conversa atribuída a ${name} com sucesso!`)
+                } else {
+                    toast.error('Não foi possível atribuir o agente. Tente novamente.')
+                }
             } else {
-                toast.success('Atribuição removida com sucesso!')
+                if (data.assignedToId === null) {
+                    toast.success('Atribuição removida com sucesso!')
+                } else {
+                    toast.error('Não foi possível remover a atribuição. Tente novamente.')
+                }
             }
         } catch {
             toast.error('Erro ao atribuir conversa')
