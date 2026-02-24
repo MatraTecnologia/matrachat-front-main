@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams, useRouter } from 'next/navigation'
 import {
     Search, MessageSquare, Send, Paperclip, Smile,
@@ -409,7 +410,7 @@ type OrgTagRef = { id: string; name: string; color: string }
 function ConversationList({
     contacts, noChannelContacts, noChannelLoading, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
     channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole, members,
-    advancedFilterConditions, onOpenAdvancedFilters,
+    advancedFilterConditions, onOpenAdvancedFilters, loadMore, hasMore, loadingMore,
 }: {
     contacts: Contact[]
     noChannelContacts: Contact[]
@@ -433,11 +434,17 @@ function ConversationList({
     members: MemberRef[]
     advancedFilterConditions: FilterCondition[]
     onOpenAdvancedFilters: () => void
+    loadMore?: () => void
+    hasMore?: boolean
+    loadingMore?: boolean
 }) {
     const [search, setSearch] = useState('')
     const [modalContact, setModalContact] = useState<Contact | null>(null)
     const [searchResults, setSearchResults] = useState<Contact[] | null>(null)
     const [searchLoading, setSearchLoading] = useState(false)
+
+    // Virtualização da lista
+    const scrollRef = useRef<HTMLDivElement>(null)
 
     // Sync histórico completo
     const [syncingHistory, setSyncingHistory] = useState(false)
@@ -685,6 +692,25 @@ function ConversationList({
         ? (searchResults ?? []).filter(applyFilters)
         : sourceContacts.filter(applyFilters)
 
+    // ── Virtualização da lista ────────────────────────────────────────────────
+    const virtualizer = useVirtualizer({
+        count: filtered.length,
+        getScrollElement: () => scrollRef.current,
+        estimateSize: () => 72,
+        overscan: 8,
+        measureElement: (el: Element) => el?.getBoundingClientRect().height ?? 72,
+    })
+    const virtualItems = virtualizer.getVirtualItems()
+
+    // Scroll infinito: quando o último item virtual está próximo do fim, carrega mais
+    useEffect(() => {
+        if (!virtualItems.length || !hasMore || loadingMore || search || tab === 'nochannel') return
+        const lastItem = virtualItems[virtualItems.length - 1]
+        if (lastItem.index >= filtered.length - 10) {
+            loadMore?.()
+        }
+    }, [virtualItems, filtered.length, hasMore, loadingMore, loadMore, search, tab])
+
     return (
         <div className="flex h-full w-[300px] shrink-0 flex-col border-r">
             {/* Tabs status */}
@@ -861,8 +887,8 @@ function ConversationList({
                 </div>
             </div>
 
-            {/* Lista */}
-            <div className="flex-1 overflow-y-auto">
+            {/* Lista virtualizada */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto">
                 {(sourceLoading || searchLoading) && (
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -876,18 +902,43 @@ function ConversationList({
                         </p>
                     </div>
                 )}
-                {!sourceLoading && !searchLoading && filtered.map((c) => (
-                    <ContactItem
-                        key={c.id}
-                        contact={c}
-                        active={selected?.id === c.id}
-                        onClick={() => onSelect(c)}
-                        unreadCount={unreadIds.get(c.id) ?? 0}
-                        onContextAction={handleContextAction}
-                        members={members}
-                        tags={tags}
-                    />
-                ))}
+                {!sourceLoading && !searchLoading && filtered.length > 0 && (
+                    <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+                        {virtualItems.map((virtualRow) => {
+                            const c = filtered[virtualRow.index]
+                            if (!c) return null
+                            return (
+                                <div
+                                    key={virtualRow.key}
+                                    data-index={virtualRow.index}
+                                    ref={virtualizer.measureElement}
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        transform: `translateY(${virtualRow.start}px)`,
+                                    }}
+                                >
+                                    <ContactItem
+                                        contact={c}
+                                        active={selected?.id === c.id}
+                                        onClick={() => onSelect(c)}
+                                        unreadCount={unreadIds.get(c.id) ?? 0}
+                                        onContextAction={handleContextAction}
+                                        members={members}
+                                        tags={tags}
+                                    />
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+                {loadingMore && (
+                    <div className="flex items-center justify-center py-3">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                )}
             </div>
             <ContactModal
                 contact={modalContact}
@@ -2294,10 +2345,14 @@ function ConversationsPageInner() {
     const [tab, setTab]               = useState<ConvTab>(
         isAdminOrOwner ? 'all' : 'mine'
     )
-    const [contacts, setContacts]     = useState<Contact[]>([])
+    const [contacts, setContacts]         = useState<Contact[]>([])
     const [noChannelContacts, setNoChannelContacts] = useState<Contact[]>([])
     const [noChannelLoading, setNoChannelLoading]   = useState(false)
-    const [loading, setLoading]       = useState(true)
+    const [loading, setLoading]           = useState(true)
+    const [loadingMore, setLoadingMore]   = useState(false)
+    const [contactsHasMore, setContactsHasMore] = useState(false)
+    const contactsPageRef   = useRef(1)
+    const totalFetchedRef   = useRef(0)
     const [selected, setSelected]     = useState<Contact | null>(null)
     const [waChannels, setWaChannels] = useState<ChannelRef[]>([])
     const [members, setMembers]       = useState<MemberRef[]>([])
@@ -2313,25 +2368,42 @@ function ConversationsPageInner() {
         channel: null,
     })
 
-    const loadContacts = useCallback(async (tId?: string | null) => {
-        setLoading(true)
+    const loadContacts = useCallback(async (tId?: string | null, page = 1) => {
+        const limit = page === 1 ? 500 : 100
+        if (page === 1) { setLoading(true); contactsPageRef.current = 1; totalFetchedRef.current = 0 }
+        else              setLoadingMore(true)
         try {
             const { data } = await api.get('/contacts', {
                 params: {
-                    limit: 500,
+                    limit,
+                    page,
                     hasMessages: true,
                     ...(tId ? { tagId: tId } : {}),
                     // Se não é admin/owner OU se ownOnly está ativo, filtra por usuário
                     ...((shouldFilterByUser || ownOnly) && userId ? { assignedToUserId: userId } : {})
                 },
             })
-            setContacts(data.contacts)
+            if (page === 1) {
+                setContacts(data.contacts)
+                totalFetchedRef.current = data.contacts.length
+            } else {
+                setContacts(prev => [...prev, ...data.contacts])
+                totalFetchedRef.current += data.contacts.length
+            }
+            contactsPageRef.current = page
+            setContactsHasMore(totalFetchedRef.current < (data.total ?? 0))
         } catch {
-            setContacts([])
+            if (page === 1) setContacts([])
         } finally {
-            setLoading(false)
+            if (page === 1) setLoading(false)
+            else            setLoadingMore(false)
         }
     }, [shouldFilterByUser, ownOnly, userId])
+
+    const loadMoreContacts = useCallback(() => {
+        if (!contactsHasMore || loadingMore || loading) return
+        loadContacts(tagFilter, contactsPageRef.current + 1)
+    }, [contactsHasMore, loadingMore, loading, loadContacts, tagFilter])
 
     const loadChannels = useCallback(async () => {
         try {
@@ -2619,6 +2691,9 @@ function ConversationsPageInner() {
                     members={members}
                     advancedFilterConditions={advancedFilterConditions}
                     onOpenAdvancedFilters={() => setAdvancedFiltersOpen(true)}
+                    loadMore={loadMoreContacts}
+                    hasMore={contactsHasMore}
+                    loadingMore={loadingMore}
                 />
                 <div className="flex flex-1 overflow-hidden">
                     {selected && orgId
