@@ -27,6 +27,7 @@ import {
     Zap,
     Kanban,
     ListTodo,
+    FileText,
 
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -414,6 +415,17 @@ function SidebarContent({
                         icon={Hash}
                         label="Canais"
                         active={pathname.startsWith('/channels')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* Templates */}
+                {permissions?.permissions.canManageChannels !== false && (
+                    <NavItem
+                        href="/templates"
+                        icon={FileText}
+                        label="Templates"
+                        active={pathname.startsWith('/templates')}
                         expanded={expanded}
                     />
                 )}
