@@ -198,7 +198,7 @@ function ContactModal({ contact, open, onClose }: { contact: Contact | null; ope
 // ─── ContactItem ──────────────────────────────────────────────────────────────
 
 function ContactItem({
-    contact, active, onClick, unreadCount, onContextAction, members, tags,
+    contact, active, onClick, unreadCount, onContextAction, members, tags, canAssignConversations,
 }: {
     contact: Contact
     active: boolean
@@ -207,6 +207,7 @@ function ContactItem({
     onContextAction: (action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email', contact: Contact, payload?: string) => void
     members: MemberRef[]
     tags: OrgTagRef[]
+    canAssignConversations?: boolean
 }) {
     const hasUnread = (unreadCount ?? 0) > 0
     const inner = (
@@ -305,8 +306,8 @@ function ContactItem({
                 </ContextMenuItem>
                 <ContextMenuSeparator />
 
-                {/* Atribuir agente */}
-                <ContextMenuSub>
+                {/* Atribuir agente — visível apenas para quem tem permissão */}
+                {canAssignConversations && <ContextMenuSub>
                     <ContextMenuSubTrigger className="gap-2 text-xs">
                         <UserPlus className="h-3.5 w-3.5" />Atribuir agente
                     </ContextMenuSubTrigger>
@@ -338,7 +339,7 @@ function ContactItem({
                             ))
                         )}
                     </ContextMenuSubContent>
-                </ContextMenuSub>
+                </ContextMenuSub>}
 
                 {/* Gerenciar etiquetas */}
                 <ContextMenuSub>
@@ -410,7 +411,7 @@ type OrgTagRef = { id: string; name: string; color: string }
 function ConversationList({
     contacts, noChannelContacts, noChannelLoading, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
     channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole, members,
-    advancedFilterConditions, onOpenAdvancedFilters, loadMore, hasMore, loadingMore,
+    advancedFilterConditions, onOpenAdvancedFilters, loadMore, hasMore, loadingMore, canAssignConversations,
 }: {
     contacts: Contact[]
     noChannelContacts: Contact[]
@@ -437,6 +438,7 @@ function ConversationList({
     loadMore?: () => void
     hasMore?: boolean
     loadingMore?: boolean
+    canAssignConversations?: boolean
 }) {
     const [search, setSearch] = useState('')
     const [modalContact, setModalContact] = useState<Contact | null>(null)
@@ -980,6 +982,7 @@ function ConversationList({
                                         onContextAction={handleContextAction}
                                         members={members}
                                         tags={tags}
+                                        canAssignConversations={canAssignConversations}
                                     />
                                 </div>
                             )
@@ -1290,7 +1293,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
 
 // ─── ConversationDetail ───────────────────────────────────────────────────────
 
-function ConversationDetail({ contact, waChannels, orgId, members, onContactUpdated, incomingMessage, canSend }: {
+function ConversationDetail({ contact, waChannels, orgId, members, onContactUpdated, incomingMessage, canSend, canAssignConversations }: {
     contact: Contact
     waChannels: ChannelRef[]
     orgId: string
@@ -1298,6 +1301,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     onContactUpdated: (updated: Partial<Contact> & { id: string }) => void
     incomingMessage?: { id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null
     canSend?: boolean
+    canAssignConversations?: boolean
 }) {
     const [contactModalOpen, setContactModalOpen] = useState(false)
     const [reply, setReply]         = useState('')
@@ -1934,8 +1938,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
 
                 {/* Agent assignment */}
                 <div className="flex items-center gap-1">
-                    {/* Assign dropdown */}
-                    <DropdownMenu>
+                    {/* Assign dropdown — visível apenas para quem tem permissão */}
+                    {canAssignConversations && <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="outline"
@@ -1992,7 +1996,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                 </>
                             )}
                         </DropdownMenuContent>
-                    </DropdownMenu>
+                    </DropdownMenu>}
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -2417,6 +2421,8 @@ function ConversationsPageInner() {
     const [selected, setSelected]     = useState<Contact | null>(null)
     const [waChannels, setWaChannels] = useState<ChannelRef[]>([])
     const [members, setMembers]       = useState<MemberRef[]>([])
+    const rawMembersRef = useRef<RawMember[]>([])
+    const [canAssignConversations, setCanAssignConversations] = useState(false)
     const [tags, setTags]             = useState<OrgTagRef[]>([])
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
     const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null>(null)
@@ -2477,6 +2483,7 @@ function ConversationsPageInner() {
     const loadMembers = useCallback(async () => {
         try {
             const { data } = await api.get('/agent/members')
+            rawMembersRef.current = data as RawMember[]
             const flat: MemberRef[] = (data as RawMember[]).map((m) => ({
                 id:    m.user.id,
                 name:  m.user.name,
@@ -2540,6 +2547,14 @@ function ConversationsPageInner() {
         }
     }, [contactFilter, contacts, selected])
 
+    // Deriva permissão de atribuição: admin/owner sempre pode; membros precisam de canAssign
+    useEffect(() => {
+        if (isAdminOrOwner) { setCanAssignConversations(true); return }
+        if (!userId) return
+        const myMember = rawMembersRef.current.find((m) => m.user.id === userId)
+        setCanAssignConversations(myMember?.canAssign === true)
+    }, [userId, isAdminOrOwner, members])
+
     // ── SSE: real-time events from agent SSE stream ───────────────────────────
 
     const selectedRef = useRef(selected)
@@ -2596,7 +2611,7 @@ function ConversationsPageInner() {
                 convStatus: ev.convStatus,
                 assignedToId: ev.assignedToId,
                 assignedTo: ev.assignedToName
-                    ? { id: ev.assignedToId ?? '', name: ev.assignedToName, image: null }
+                    ? { id: ev.assignedToId ?? '', name: ev.assignedToName, image: ev.assignedToImage ?? null }
                     : null,
             }
         }))
@@ -2607,7 +2622,7 @@ function ConversationsPageInner() {
                 convStatus: ev.convStatus,
                 assignedToId: ev.assignedToId,
                 assignedTo: ev.assignedToName
-                    ? { id: ev.assignedToId ?? '', name: ev.assignedToName, image: null }
+                    ? { id: ev.assignedToId ?? '', name: ev.assignedToName, image: ev.assignedToImage ?? null }
                     : null,
             }
         })
@@ -2728,6 +2743,7 @@ function ConversationsPageInner() {
                     onContactUpdated={handleContactUpdated}
                     userRole={perms?.role ?? null}
                     members={members}
+                    canAssignConversations={canAssignConversations}
                     advancedFilterConditions={advancedFilterConditions}
                     onOpenAdvancedFilters={() => setAdvancedFiltersOpen(true)}
                     loadMore={loadMoreContacts}
@@ -2746,6 +2762,7 @@ function ConversationsPageInner() {
                                 onContactUpdated={handleContactUpdated}
                                 incomingMessage={incomingMessage}
                                 canSend={canSend}
+                                canAssignConversations={canAssignConversations}
                             />
                         )
                         : <ConversationEmpty />
