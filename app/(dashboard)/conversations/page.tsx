@@ -572,7 +572,8 @@ type OrgTagRef = { id: string; name: string; color: string }
 
 function ConversationList({
     contacts, noChannelContacts, noChannelLoading, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
-    channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole, members,
+    channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, activeChannel, onChannelFilterChange,
+    orgId, onContactUpdated, userRole, members,
     advancedFilterConditions, onOpenAdvancedFilters, loadMore, hasMore, loadingMore, canAssignConversations,
     teams, allTeams, activeTeamId, onTeamChange,
 }: {
@@ -592,6 +593,8 @@ function ConversationList({
     tags: OrgTagRef[]
     tagFilter: string | null
     onTagFilterChange: (tagId: string | null) => void
+    activeChannel?: { id: string; name: string; type: string } | null
+    onChannelFilterChange?: (channelId: string | null) => void
     orgId: string | null
     onContactUpdated: (updated: Partial<Contact> & { id: string }) => void
     userRole: string | null
@@ -1134,6 +1137,24 @@ function ConversationList({
                             {isSyncPolling ? 'Sincronizando...' : 'Sincronizar histórico de instâncias'}
                         </button>
                     )}
+                </div>
+            )}
+
+            {/* Active channel filter badge */}
+            {activeChannel && onChannelFilterChange && (
+                <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/30">
+                    <ChannelIcon
+                        type={activeChannel.type}
+                        className={cn('h-3 w-3 shrink-0', activeChannel.type === 'whatsapp' ? 'text-green-600' : 'text-blue-600')}
+                    />
+                    <span className="text-[11px] font-medium truncate flex-1">{activeChannel.name}</span>
+                    <button
+                        onClick={() => onChannelFilterChange(null)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        title="Ver todos os canais"
+                    >
+                        <X className="h-3 w-3" />
+                    </button>
                 </div>
             )}
 
@@ -2659,7 +2680,8 @@ function ConversationsPageInner() {
     const totalFetchedRef   = useRef(0)
     const [selected, setSelected]     = useState<Contact | null>(null)
     const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
-    const [waChannels, setWaChannels] = useState<ChannelRef[]>([])
+    const [waChannels, setWaChannels]   = useState<ChannelRef[]>([])
+    const [allChannels, setAllChannels] = useState<ChannelRef[]>([])
     const channelsRef = useRef<ChannelRef[]>([])       // todos os canais para lookup no SSE
     const [members, setMembers]       = useState<MemberRef[]>([])
     const rawMembersRef = useRef<RawMember[]>([])
@@ -2720,9 +2742,10 @@ function ConversationsPageInner() {
         try {
             const { data } = await api.get('/channels')
             channelsRef.current = data as ChannelRef[]
+            setAllChannels(data as ChannelRef[])
             // Carrega TODOS os canais WhatsApp (conectados e desconectados)
             setWaChannels((data as ChannelRef[]).filter((c) => c.type === 'whatsapp'))
-        } catch { setWaChannels([]) }
+        } catch { setWaChannels([]); setAllChannels([]) }
     }, [])
 
     const loadMembers = useCallback(async () => {
@@ -2953,6 +2976,16 @@ function ConversationsPageInner() {
         router.replace(`/conversations?${params.toString()}`)
     }
 
+    function handleChannelFilterChange(channelId: string | null) {
+        const params = new URLSearchParams(searchParams.toString())
+        if (channelId) params.set('channelId', channelId)
+        else params.delete('channelId')
+        params.delete('contactId')
+        router.replace(`/conversations?${params.toString()}`)
+    }
+
+    const activeChannel = channelFilter ? allChannels.find((c) => c.id === channelFilter) ?? null : null
+
     async function handleReconnect() {
         if (!reconnectModal.channel) return
 
@@ -3026,6 +3059,8 @@ function ConversationsPageInner() {
                         tags={tags}
                         tagFilter={tagFilter}
                         onTagFilterChange={handleTagFilterChange}
+                        activeChannel={activeChannel}
+                        onChannelFilterChange={handleChannelFilterChange}
                         orgId={orgId}
                         onContactUpdated={handleContactUpdated}
                         userRole={perms?.role ?? null}

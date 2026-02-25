@@ -364,6 +364,24 @@ function SidebarContent({
                     active={pathname.startsWith('/conversations')}
                     expanded={expanded}
                 >
+                    {/* Todos os canais — limpa o filtro de canal */}
+                    <Link
+                        href="/conversations"
+                        className={cn(
+                            'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+                            pathname.startsWith('/conversations') && !activeChannelId
+                                ? 'bg-primary/10 text-primary font-medium'
+                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                    >
+                        <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                        <span className="flex-1 truncate">Todos os canais</span>
+                    </Link>
+
+                    {sidebarChannels.length > 0 && (
+                        <div className="my-0.5 h-px bg-border/60" />
+                    )}
+
                     {sidebarChannels.length === 0 && sidebarTags.length === 0 && (
                         <span className="px-2 py-1.5 text-xs text-muted-foreground/60 italic">
                             Nenhum canal ativo
