@@ -685,15 +685,22 @@ function ConversationList({
         } catch (err: any) {
             clearInterval(syncTimerRef.current!)
             setSyncProgress(0)
-            if (err?.response?.status === 409 && err?.response?.data?.jobId) {
-                // Já há sync em andamento — apenas acompanha o job existente
-                const jobId = err.response.data.jobId
-                setSyncResult({ jobId })
-                const toastId = toast.loading('Sincronização já em andamento para esta organização...')
-                syncToastIdRef.current = toastId
-                startSyncPoll(jobId, toastId)
+            if (err?.response?.status === 409) {
+                const jobId = err.response.data?.jobId
+                if (jobId) {
+                    // Já há sync em andamento — apenas acompanha o job existente
+                    setSyncResult({ jobId })
+                    const toastId = toast.loading('Sincronização já em andamento — acompanhando progresso...')
+                    syncToastIdRef.current = toastId
+                    startSyncPoll(jobId, toastId)
+                } else {
+                    // 409 sem jobId (ex: canal desconectado)
+                    const msg = err.response.data?.error ?? 'Já existe uma sincronização em andamento.'
+                    toast.warning(msg)
+                }
             } else {
-                toast.error('Erro ao sincronizar histórico.')
+                const msg = err?.response?.data?.error ?? 'Erro ao sincronizar histórico.'
+                toast.error(msg)
             }
         } finally {
             setSyncingHistory(false)
