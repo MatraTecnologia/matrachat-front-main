@@ -9,7 +9,7 @@ import {
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
     CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
-    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar, Users, UsersRound,
+    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar, Users, UsersRound, ArrowLeft,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -962,7 +962,7 @@ function ConversationList({
     }, [virtualItems, filtered.length, hasMore, loadingMore, loadMore, search, tab])
 
     return (
-        <div className="flex h-full w-[300px] shrink-0 flex-col border-r">
+        <div className="flex h-full w-full md:w-[300px] md:shrink-0 flex-col border-r">
             {/* Tabs status */}
             <div className="border-b px-3 pt-3 pb-0">
                 <Tabs value={status} onValueChange={(v) => onStatusChange(v as ConvStatus)}>
@@ -1521,7 +1521,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
 
 // ─── ConversationDetail ───────────────────────────────────────────────────────
 
-function ConversationDetail({ contact, waChannels, orgId, members, onContactUpdated, incomingMessage, canSend, canAssignConversations }: {
+function ConversationDetail({ contact, waChannels, orgId, members, onContactUpdated, incomingMessage, canSend, canAssignConversations, onBack }: {
     contact: Contact
     waChannels: ChannelRef[]
     orgId: string
@@ -1530,6 +1530,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     incomingMessage?: { id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null
     canSend?: boolean
     canAssignConversations?: boolean
+    onBack?: () => void
 }) {
     const [contactModalOpen, setContactModalOpen] = useState(false)
     const [reply, setReply]         = useState('')
@@ -2104,6 +2105,16 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         <div className="flex flex-1 flex-col overflow-hidden">
             {/* Header */}
             <div className="flex items-center gap-3 border-b px-4 py-3">
+                {/* Botão voltar — apenas no mobile */}
+                {onBack && (
+                    <button
+                        onClick={onBack}
+                        className="md:hidden flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors -ml-1"
+                        aria-label="Voltar para lista"
+                    >
+                        <ArrowLeft className="h-5 w-5" />
+                    </button>
+                )}
                 <Avatar className="h-8 w-8 shrink-0">
                     {contact.avatarUrl && <AvatarImage src={contact.avatarUrl} />}
                     <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
@@ -2647,6 +2658,7 @@ function ConversationsPageInner() {
     const contactsPageRef   = useRef(1)
     const totalFetchedRef   = useRef(0)
     const [selected, setSelected]     = useState<Contact | null>(null)
+    const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
     const [waChannels, setWaChannels] = useState<ChannelRef[]>([])
     const channelsRef = useRef<ChannelRef[]>([])       // todos os canais para lookup no SSE
     const [members, setMembers]       = useState<MemberRef[]>([])
@@ -2921,6 +2933,7 @@ function ConversationsPageInner() {
 
         // Canal conectado ou não encontrado - prossegue normalmente
         setSelected(c)
+        setMobileView('detail')
         setIncoming(null)
         setUnreadIds((prev) => {
             const next = new Map(prev)
@@ -2974,6 +2987,7 @@ function ConversationsPageInner() {
 
         const c = reconnectModal.contact
         setSelected(c)
+        setMobileView('detail')
         setIncoming(null)
         setUnreadIds((prev) => {
             const next = new Map(prev)
@@ -2990,39 +3004,50 @@ function ConversationsPageInner() {
     return (
         <>
             <div className="flex flex-1 overflow-hidden">
-                <ConversationList
-                    contacts={contacts}
-                    noChannelContacts={noChannelContacts}
-                    noChannelLoading={noChannelLoading}
-                    loading={loading}
-                    selected={selected}
-                    onSelect={handleSelectContact}
-                    status={status}
-                    tab={tab}
-                    onStatusChange={setStatus}
-                    onTabChange={(t) => { setTab(t); setActiveTeamId(null) }}
-                    channelFilter={channelFilter}
-                    userId={userId}
-                    unreadIds={unreadIds}
-                    tags={tags}
-                    tagFilter={tagFilter}
-                    onTagFilterChange={handleTagFilterChange}
-                    orgId={orgId}
-                    onContactUpdated={handleContactUpdated}
-                    userRole={perms?.role ?? null}
-                    members={members}
-                    canAssignConversations={canAssignConversations}
-                    advancedFilterConditions={advancedFilterConditions}
-                    onOpenAdvancedFilters={() => setAdvancedFiltersOpen(true)}
-                    loadMore={loadMoreContacts}
-                    hasMore={contactsHasMore}
-                    loadingMore={loadingMore}
-                    teams={teams}
-                    allTeams={allTeams}
-                    activeTeamId={activeTeamId}
-                    onTeamChange={setActiveTeamId}
-                />
-                <div className="flex flex-1 overflow-hidden">
+                {/* Lista de contatos — tela cheia no mobile, painel lateral no desktop */}
+                <div className={cn(
+                    'flex overflow-hidden md:w-[300px] md:shrink-0',
+                    mobileView === 'detail' ? 'hidden md:flex' : 'flex flex-1 md:flex-none'
+                )}>
+                    <ConversationList
+                        contacts={contacts}
+                        noChannelContacts={noChannelContacts}
+                        noChannelLoading={noChannelLoading}
+                        loading={loading}
+                        selected={selected}
+                        onSelect={handleSelectContact}
+                        status={status}
+                        tab={tab}
+                        onStatusChange={setStatus}
+                        onTabChange={(t) => { setTab(t); setActiveTeamId(null) }}
+                        channelFilter={channelFilter}
+                        userId={userId}
+                        unreadIds={unreadIds}
+                        tags={tags}
+                        tagFilter={tagFilter}
+                        onTagFilterChange={handleTagFilterChange}
+                        orgId={orgId}
+                        onContactUpdated={handleContactUpdated}
+                        userRole={perms?.role ?? null}
+                        members={members}
+                        canAssignConversations={canAssignConversations}
+                        advancedFilterConditions={advancedFilterConditions}
+                        onOpenAdvancedFilters={() => setAdvancedFiltersOpen(true)}
+                        loadMore={loadMoreContacts}
+                        hasMore={contactsHasMore}
+                        loadingMore={loadingMore}
+                        teams={teams}
+                        allTeams={allTeams}
+                        activeTeamId={activeTeamId}
+                        onTeamChange={setActiveTeamId}
+                    />
+                </div>
+
+                {/* Detalhe da conversa — tela cheia no mobile, painel direito no desktop */}
+                <div className={cn(
+                    'flex flex-1 overflow-hidden',
+                    mobileView === 'list' ? 'hidden md:flex' : 'flex'
+                )}>
                     {selected && orgId
                         ? (
                             <ConversationDetail
@@ -3035,6 +3060,7 @@ function ConversationsPageInner() {
                                 incomingMessage={incomingMessage}
                                 canSend={canSend}
                                 canAssignConversations={canAssignConversations}
+                                onBack={() => setMobileView('list')}
                             />
                         )
                         : <ConversationEmpty />

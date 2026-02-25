@@ -29,11 +29,12 @@ import {
     ListTodo,
     FileText,
     Layers,
-
+    Menu,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { PermissionsContext, type OrgPermissions } from '@/contexts/permissions-context'
@@ -611,6 +612,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const activeChannelId = searchParams?.get('channelId')
 
     const [expanded, setExpanded] = useState(true)
+    const [mobileOpen, setMobileOpen] = useState(false)
+
+    // Fecha sidebar mobile ao navegar
+    useEffect(() => { setMobileOpen(false) }, [pathname])
 
     // Organização
     const [orgId, setOrgId] = useState<string | null>(null)
@@ -705,30 +710,85 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {/* <GlobalEventCapture /> */}
 
                 <div className="flex h-svh overflow-hidden bg-background">
-                {/* ── Sidebar ── */}
-                <SidebarContent
-                    expanded={expanded}
-                    setExpanded={setExpanded}
-                    pathname={pathname}
-                    activeChannelId={activeChannelId ?? null}
-                    orgId={orgId}
-                    orgName={orgName}
-                    orgLogo={orgLogo}
-                    orgLogoBg={orgLogoBg}
-                    orgLogoFit={orgLogoFit}
-                    permissions={permissions}
-                    sidebarChannels={sidebarChannels}
-                    sidebarTags={sidebarTags}
-                    userName={userName}
-                    userImage={userImage}
-                    userId={userId}
-                />
+
+                {/* ── Sidebar — desktop (≥md) ── */}
+                <div className="hidden md:flex">
+                    <SidebarContent
+                        expanded={expanded}
+                        setExpanded={setExpanded}
+                        pathname={pathname}
+                        activeChannelId={activeChannelId ?? null}
+                        orgId={orgId}
+                        orgName={orgName}
+                        orgLogo={orgLogo}
+                        orgLogoBg={orgLogoBg}
+                        orgLogoFit={orgLogoFit}
+                        permissions={permissions}
+                        sidebarChannels={sidebarChannels}
+                        sidebarTags={sidebarTags}
+                        userName={userName}
+                        userImage={userImage}
+                        userId={userId}
+                    />
+                </div>
+
+                {/* ── Sidebar — mobile drawer ── */}
+                <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+                    <SheetContent side="left" className="p-0 w-64 flex flex-col">
+                        <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
+                        <SidebarContent
+                            expanded={true}
+                            setExpanded={() => {}}
+                            pathname={pathname}
+                            activeChannelId={activeChannelId ?? null}
+                            orgId={orgId}
+                            orgName={orgName}
+                            orgLogo={orgLogo}
+                            orgLogoBg={orgLogoBg}
+                            orgLogoFit={orgLogoFit}
+                            permissions={permissions}
+                            sidebarChannels={sidebarChannels}
+                            sidebarTags={sidebarTags}
+                            userName={userName}
+                            userImage={userImage}
+                            userId={userId}
+                        />
+                    </SheetContent>
+                </Sheet>
 
                 {/* ── Page content ── */}
                 <PermissionsContext.Provider value={{ data: permissions, loading: permissionsLoading }}>
-                    <main className="flex flex-1 overflow-hidden">
-                        {children}
-                    </main>
+                    <div className="flex flex-1 flex-col overflow-hidden">
+                        {/* Barra superior mobile (< md) */}
+                        <header className="flex md:hidden shrink-0 items-center gap-3 border-b bg-background px-3 py-2">
+                            <button
+                                onClick={() => setMobileOpen(true)}
+                                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                aria-label="Abrir menu"
+                            >
+                                <Menu className="h-5 w-5" />
+                            </button>
+                            <div
+                                className={cn(
+                                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg overflow-hidden font-bold select-none text-sm',
+                                    !orgLogo && 'bg-primary text-primary-foreground'
+                                )}
+                                style={orgLogo && orgLogoBg ? { backgroundColor: orgLogoBg } : undefined}
+                            >
+                                {orgLogo ? (
+                                    <img src={orgLogo} alt={orgName || 'Logo'} className="h-full w-full object-contain p-0.5" />
+                                ) : (
+                                    (orgName || 'M').charAt(0).toUpperCase()
+                                )}
+                            </div>
+                            <span className="flex-1 truncate text-sm font-semibold text-foreground">{orgName}</span>
+                            <ThemeToggle />
+                        </header>
+
+                        <main className="flex flex-1 overflow-hidden">
+                            {children}
+                        </main>
+                    </div>
                 </PermissionsContext.Provider>
             </div>
 
