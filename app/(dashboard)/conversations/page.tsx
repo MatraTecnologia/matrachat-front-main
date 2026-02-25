@@ -373,6 +373,16 @@ function ContactItem({
                             {contact.assignedTo.name.split(' ')[0]}
                         </span>
                     )}
+                    {contact.team && (
+                        <span
+                            className="inline-flex items-center gap-1 text-[10px] shrink-0 rounded-full px-1.5 py-0.5 font-medium"
+                            style={{ backgroundColor: contact.team.color + '22', color: contact.team.color }}
+                            title={`Time: ${contact.team.name}`}
+                        >
+                            <Users className="h-2.5 w-2.5" />
+                            {contact.team.name}
+                        </span>
+                    )}
                 </div>
                 {/* Tags */}
                 {(contact.tags ?? []).length > 0 && (
@@ -2638,6 +2648,7 @@ function ConversationsPageInner() {
     const totalFetchedRef   = useRef(0)
     const [selected, setSelected]     = useState<Contact | null>(null)
     const [waChannels, setWaChannels] = useState<ChannelRef[]>([])
+    const channelsRef = useRef<ChannelRef[]>([])       // todos os canais para lookup no SSE
     const [members, setMembers]       = useState<MemberRef[]>([])
     const rawMembersRef = useRef<RawMember[]>([])
     const [canAssignConversations, setCanAssignConversations] = useState(false)
@@ -2696,6 +2707,7 @@ function ConversationsPageInner() {
     const loadChannels = useCallback(async () => {
         try {
             const { data } = await api.get('/channels')
+            channelsRef.current = data as ChannelRef[]
             // Carrega TODOS os canais WhatsApp (conectados e desconectados)
             setWaChannels((data as ChannelRef[]).filter((c) => c.type === 'whatsapp'))
         } catch { setWaChannels([]) }
@@ -2812,6 +2824,11 @@ function ConversationsPageInner() {
                 return next
             })
         }
+        // Resolve canal pelo channelId usando o ref (sem depender de re-render)
+        const resolveChannel = (channelId?: string | null): ChannelRef | null => {
+            if (!channelId) return null
+            return channelsRef.current.find((c) => c.id === channelId) ?? null
+        }
         // Bubble the contact to top of list (or add if new contact)
         setContacts((prev) => {
             const idx = prev.findIndex((c) => c.id === contactId)
@@ -2825,18 +2842,27 @@ function ConversationsPageInner() {
                         avatarUrl:  ev.contact.avatarUrl,
                         externalId: ev.contact.externalId,
                         channelId:  ev.contact.channelId,
+                        channel:    resolveChannel(ev.contact.channelId),
                         convStatus: ev.contact.convStatus,
                         createdAt:  ev.contact.createdAt,
+                        assignedToId: ev.assignedToId,
                         tags:       [],
                     }
                     return [newContact, ...prev]
                 }
                 return prev
             }
-            if (idx === 0) return prev // já no topo
+            // Contato existente: sobe para o topo e atualiza channel se chegou channelId novo
+            const existing = prev[idx]
+            const incomingChannelId = ev.contact?.channelId ?? ev.channelId ?? existing.channelId
+            const channelChanged = incomingChannelId && incomingChannelId !== existing.channelId
             const updated = [...prev]
             const [item] = updated.splice(idx, 1)
-            return [item, ...updated]
+            const updatedItem: Contact = channelChanged
+                ? { ...item, channelId: incomingChannelId!, channel: resolveChannel(incomingChannelId) }
+                : item
+            if (idx === 0 && !channelChanged) return prev // já no topo e nada mudou
+            return [updatedItem, ...updated]
         })
     }, [])
 
