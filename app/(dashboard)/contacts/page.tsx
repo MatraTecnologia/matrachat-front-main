@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
     Users, Plus, Search, Loader2, Pencil, Trash2,
     Phone, Mail, ChevronLeft, ChevronRight, RefreshCw,
-    MessageCircle, Globe, Hash, GitMerge,
+    MessageCircle, Globe, Hash, GitMerge, Send,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -251,7 +251,13 @@ export default function ContactsPage() {
     const [formOpen, setFormOpen]         = useState(false)
     const [editContact, setEditContact]   = useState<Contact | undefined>()
     const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null)
-    const [selectChannelModal, setSelectChannelModal] = useState<{ open: boolean; contact: Contact | null }>({ open: false, contact: null })
+    const [startConvModal, setStartConvModal] = useState<{
+        open: boolean
+        contact: Contact | null
+        channelId: string | null
+        message: string
+        sending: boolean
+    }>({ open: false, contact: null, channelId: null, message: '', sending: false })
 
     const loadContacts = useCallback(async (id: string, q: string, p: number) => {
         setLoading(true)
@@ -335,32 +341,50 @@ export default function ContactsPage() {
     }
 
     function handleStartConversation(contact: Contact) {
-        // Se já tem canal → vai direto
-        if (contact.channelId) {
-            router.push(`/conversations?contactId=${contact.id}`)
-            return
-        }
-        // Sem canal: se só tem 1 instância conectada → vincula e vai
-        if (waChannels.length === 1) {
-            handleSelectChannelAndStart(contact, waChannels[0])
-            return
-        }
-        // Sem canal e múltiplas instâncias → abre seletor
-        if (waChannels.length > 1) {
-            setSelectChannelModal({ open: true, contact })
-            return
-        }
-        // Sem canal e sem instância conectada → vai assim mesmo (sem WhatsApp)
-        router.push(`/conversations?contactId=${contact.id}`)
+        // Determina canal inicial: o do contato ou o único disponível
+        const initialChannelId = contact.channelId
+            ?? (waChannels.length === 1 ? waChannels[0].id : null)
+        setStartConvModal({ open: true, contact, channelId: initialChannelId, message: '', sending: false })
     }
 
-    async function handleSelectChannelAndStart(contact: Contact, channel: ChannelRef) {
+    async function handleSendAndNavigate(skipSend: boolean) {
+        const { contact, channelId, message } = startConvModal
+        if (!contact) return
+
+        setStartConvModal((s) => ({ ...s, sending: true }))
         try {
-            await api.patch(`/contacts/${contact.id}`, { channelId: channel.id })
+            // Vincula canal ao contato se mudou ou não tinha
+            if (channelId && channelId !== contact.channelId) {
+                await api.patch(`/contacts/${contact.id}`, { channelId })
+            }
+
+            if (!skipSend && message.trim()) {
+                // Salva mensagem no DB (dispara SSE para todos os agentes)
+                await api.post('/messages', {
+                    contactId: contact.id,
+                    channelId,
+                    direction: 'outbound',
+                    type: 'text',
+                    content: message.trim(),
+                })
+
+                // Envia via WhatsApp se o canal for whatsapp e o contato tiver número
+                const channel = waChannels.find((c) => c.id === channelId)
+                const phone = contact.phone ?? contact.externalId
+                if (channel?.type === 'whatsapp' && phone) {
+                    await api.post(`/channels/${channelId}/whatsapp/send`, {
+                        number: phone,
+                        text: message.trim(),
+                    }).catch(() => null) // não bloqueia se falhar envio
+                }
+            }
         } catch {
-            // não bloqueia — navega mesmo assim
+            toast.error('Erro ao enviar mensagem.')
+            setStartConvModal((s) => ({ ...s, sending: false }))
+            return
         }
-        setSelectChannelModal({ open: false, contact: null })
+
+        setStartConvModal({ open: false, contact: null, channelId: null, message: '', sending: false })
         router.push(`/conversations?contactId=${contact.id}`)
     }
 
@@ -489,37 +513,88 @@ export default function ContactsPage() {
                 />
             )}
 
-            {/* Modal: selecionar instância WhatsApp para iniciar conversa */}
+            {/* Modal: iniciar conversa */}
             <Dialog
-                open={selectChannelModal.open}
-                onOpenChange={(v) => !v && setSelectChannelModal({ open: false, contact: null })}
+                open={startConvModal.open}
+                onOpenChange={(v) => !v && !startConvModal.sending && setStartConvModal({ open: false, contact: null, channelId: null, message: '', sending: false })}
             >
-                <DialogContent className="sm:max-w-sm">
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <MessageCircle className="h-5 w-5 text-green-600" />
-                            Selecionar instância
+                            Iniciar conversa
                         </DialogTitle>
                         <DialogDescription>
-                            Por qual instância WhatsApp deseja iniciar a conversa com{' '}
-                            <strong>{selectChannelModal.contact?.name}</strong>?
+                            Envie a primeira mensagem para <strong>{startConvModal.contact?.name}</strong>.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="flex flex-col gap-2 py-1">
-                        {waChannels.map((ch) => (
-                            <button
-                                key={ch.id}
-                                onClick={() => selectChannelModal.contact && handleSelectChannelAndStart(selectChannelModal.contact, ch)}
-                                className="flex items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm hover:bg-muted transition-colors"
-                            >
-                                <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
-                                <span className="font-medium">{ch.name}</span>
-                            </button>
-                        ))}
+
+                    <div className="flex flex-col gap-4 py-1">
+                        {/* Seleção de canal — só aparece quando há múltiplas instâncias e o contato não tem canal */}
+                        {!startConvModal.contact?.channelId && waChannels.length > 1 && (
+                            <div className="flex flex-col gap-2">
+                                <Label className="text-xs font-medium text-muted-foreground">Instância WhatsApp</Label>
+                                <div className="flex flex-col gap-1.5">
+                                    {waChannels.map((ch) => (
+                                        <button
+                                            key={ch.id}
+                                            onClick={() => setStartConvModal((s) => ({ ...s, channelId: ch.id }))}
+                                            className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                                                startConvModal.channelId === ch.id
+                                                    ? 'border-green-500 bg-green-50 dark:bg-green-950/30'
+                                                    : 'hover:bg-muted'
+                                            }`}
+                                        >
+                                            <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
+                                            <span className="font-medium">{ch.name}</span>
+                                            {startConvModal.channelId === ch.id && (
+                                                <span className="ml-auto text-xs text-green-600 font-medium">Selecionado</span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Campo de mensagem */}
+                        <div className="flex flex-col gap-2">
+                            <Label className="text-xs font-medium text-muted-foreground">Mensagem</Label>
+                            <Textarea
+                                placeholder="Digite sua mensagem..."
+                                rows={3}
+                                value={startConvModal.message}
+                                onChange={(e) => setStartConvModal((s) => ({ ...s, message: e.target.value }))}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault()
+                                        if (startConvModal.message.trim()) handleSendAndNavigate(false)
+                                    }
+                                }}
+                                disabled={startConvModal.sending}
+                                autoFocus
+                            />
+                            <p className="text-[11px] text-muted-foreground">Enter para enviar · Shift+Enter para nova linha</p>
+                        </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setSelectChannelModal({ open: false, contact: null })}>
-                            Cancelar
+
+                    <DialogFooter className="gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => handleSendAndNavigate(true)}
+                            disabled={startConvModal.sending}
+                        >
+                            Só abrir conversa
+                        </Button>
+                        <Button
+                            onClick={() => handleSendAndNavigate(false)}
+                            disabled={startConvModal.sending || !startConvModal.message.trim() || (!startConvModal.channelId && waChannels.length > 0 && !startConvModal.contact?.channelId)}
+                        >
+                            {startConvModal.sending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Send className="mr-2 h-4 w-4" />
+                            )}
+                            Enviar e abrir
                         </Button>
                     </DialogFooter>
                 </DialogContent>
