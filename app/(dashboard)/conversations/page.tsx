@@ -9,7 +9,7 @@ import {
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
     CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
-    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar, Users,
+    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar, Users, UsersRound,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -303,15 +303,16 @@ function ConversationPreview({
 // ─── ContactItem ──────────────────────────────────────────────────────────────
 
 function ContactItem({
-    contact, active, onClick, unreadCount, onContextAction, members, tags, canAssignConversations,
+    contact, active, onClick, unreadCount, onContextAction, members, tags, teams, canAssignConversations,
 }: {
     contact: Contact
     active: boolean
     onClick: () => void
     unreadCount?: number
-    onContextAction: (action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email', contact: Contact, payload?: string) => void
+    onContextAction: (action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'assign-team' | 'unassign-team' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email', contact: Contact, payload?: string) => void
     members: MemberRef[]
     tags: OrgTagRef[]
+    teams: TeamRef[]
     canAssignConversations?: boolean
 }) {
     const hasUnread = (unreadCount ?? 0) > 0
@@ -449,6 +450,41 @@ function ContactItem({
                     </ContextMenuSubContent>
                 </ContextMenuSub>}
 
+                {/* Atribuir time — visível apenas para quem tem permissão */}
+                {canAssignConversations && <ContextMenuSub>
+                    <ContextMenuSubTrigger className="gap-2 text-xs">
+                        <UsersRound className="h-3.5 w-3.5" />Atribuir time
+                    </ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-48">
+                        {contact.teamId && (
+                            <>
+                                <ContextMenuItem className="gap-2 text-xs text-red-600 focus:text-red-600" onClick={() => onContextAction('unassign-team', contact)}>
+                                    <X className="h-3.5 w-3.5" />Remover do time
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                            </>
+                        )}
+                        {teams.length === 0 ? (
+                            <ContextMenuItem disabled className="text-xs text-muted-foreground">
+                                Nenhum time disponível
+                            </ContextMenuItem>
+                        ) : (
+                            teams.map((t) => (
+                                <ContextMenuItem
+                                    key={t.id}
+                                    className="gap-2 text-xs"
+                                    onClick={() => onContextAction('assign-team', contact, t.id)}
+                                    disabled={contact.teamId === t.id}
+                                >
+                                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                                    {t.name}
+                                    {contact.teamId === t.id && <Check className="ml-auto h-3 w-3" />}
+                                </ContextMenuItem>
+                            ))
+                        )}
+                    </ContextMenuSubContent>
+                </ContextMenuSub>}
+
                 {/* Gerenciar etiquetas */}
                 <ContextMenuSub>
                     <ContextMenuSubTrigger className="gap-2 text-xs">
@@ -528,7 +564,7 @@ function ConversationList({
     contacts, noChannelContacts, noChannelLoading, loading, selected, onSelect, status, tab, onStatusChange, onTabChange,
     channelFilter, userId, unreadIds, tags, tagFilter, onTagFilterChange, orgId, onContactUpdated, userRole, members,
     advancedFilterConditions, onOpenAdvancedFilters, loadMore, hasMore, loadingMore, canAssignConversations,
-    teams, activeTeamId, onTeamChange,
+    teams, allTeams, activeTeamId, onTeamChange,
 }: {
     contacts: Contact[]
     noChannelContacts: Contact[]
@@ -557,6 +593,7 @@ function ConversationList({
     loadingMore?: boolean
     canAssignConversations?: boolean
     teams: TeamRef[]
+    allTeams: TeamRef[]
     activeTeamId: string | null
     onTeamChange: (teamId: string | null) => void
 }) {
@@ -669,7 +706,7 @@ function ConversationList({
         return () => clearTimeout(timer)
     }, [search, orgId])
 
-    async function handleContextAction(action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email', contact: Contact, payload?: string) {
+    async function handleContextAction(action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'assign-team' | 'unassign-team' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email', contact: Contact, payload?: string) {
         if (action === 'view') {
             setModalContact(contact)
             return
@@ -716,6 +753,29 @@ function ConversationList({
                 toast.success('Agente removido!')
             } catch {
                 toast.error('Erro ao remover agente')
+            }
+            return
+        }
+
+        // Atribuir/remover time
+        if (action === 'assign-team' && payload) {
+            try {
+                await api.patch(`/contacts/${contact.id}/assign-team`, { teamId: payload })
+                const team = allTeams.find((t) => t.id === payload)
+                onContactUpdated({ id: contact.id, teamId: payload, team: team ? { id: team.id, name: team.name, color: team.color } : null })
+                toast.success('Time atribuído!')
+            } catch {
+                toast.error('Erro ao atribuir time')
+            }
+            return
+        }
+        if (action === 'unassign-team') {
+            try {
+                await api.patch(`/contacts/${contact.id}/assign-team`, { teamId: null })
+                onContactUpdated({ id: contact.id, teamId: null, team: null })
+                toast.success('Time removido!')
+            } catch {
+                toast.error('Erro ao remover time')
             }
             return
         }
@@ -1139,6 +1199,7 @@ function ConversationList({
                                         onContextAction={handleContextAction}
                                         members={members}
                                         tags={tags}
+                                        teams={allTeams}
                                         canAssignConversations={canAssignConversations}
                                     />
                                 </div>
@@ -2581,7 +2642,8 @@ function ConversationsPageInner() {
     const rawMembersRef = useRef<RawMember[]>([])
     const [canAssignConversations, setCanAssignConversations] = useState(false)
     const [tags, setTags]             = useState<OrgTagRef[]>([])
-    const [teams, setTeams]           = useState<TeamRef[]>([])
+    const [teams, setTeams]           = useState<TeamRef[]>([])   // times do usuário (sidebar tabs)
+    const [allTeams, setAllTeams]     = useState<TeamRef[]>([])   // todos os times (context menu)
     const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
     const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null>(null)
@@ -2667,6 +2729,13 @@ function ConversationsPageInner() {
         } catch { setTeams([]) }
     }, [])
 
+    const loadAllTeams = useCallback(async () => {
+        try {
+            const { data } = await api.get('/teams')
+            setAllTeams(data)
+        } catch { setAllTeams([]) }
+    }, [])
+
     const loadNotificationSettings = useCallback(async () => {
         try {
             const { data } = await api.get('/agent/members')
@@ -2699,12 +2768,13 @@ function ConversationsPageInner() {
             loadMembers()
             loadTags()
             loadTeams()
+            loadAllTeams()
             loadNotificationSettings()
             if (isAdminOrOwner) {
                 loadNoChannelContacts()
             }
         }
-    }, [orgId, tagFilter, loadContacts, loadChannels, loadMembers, loadTags, loadTeams, loadNotificationSettings, loadNoChannelContacts, isAdminOrOwner])
+    }, [orgId, tagFilter, loadContacts, loadChannels, loadMembers, loadTags, loadTeams, loadAllTeams, loadNotificationSettings, loadNoChannelContacts, isAdminOrOwner])
 
     // Auto-seleciona contato pelo contactId da URL
     useEffect(() => {
@@ -2922,6 +2992,7 @@ function ConversationsPageInner() {
                     hasMore={contactsHasMore}
                     loadingMore={loadingMore}
                     teams={teams}
+                    allTeams={allTeams}
                     activeTeamId={activeTeamId}
                     onTeamChange={setActiveTeamId}
                 />

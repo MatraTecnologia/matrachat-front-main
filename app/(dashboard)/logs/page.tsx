@@ -27,54 +27,132 @@ type LogEntry = {
     aiGenerated: boolean
 }
 
-// ─── Dados de Exemplo ─────────────────────────────────────────────────────────
+// ─── Dados Reais do Changelog ──────────────────────────────────────────────────
 
 const mockLogs: LogEntry[] = [
     {
-        id: '1',
-        date: '2024-02-20',
-        version: '1.2.0',
+        id: '8',
+        date: '2026-02-24',
+        version: '2.5.0',
         type: 'feature',
-        title: 'Dark Mode Completo Implementado',
-        summary: 'Sistema de dark mode completo com suporte para todas as páginas, imagens adaptadas e persistência automática no localStorage.',
+        title: 'Sistema de Presença em Tempo Real',
+        summary: 'Rastreamento completo de usuários online via Socket.io com suporte a supervisão de tela, status (online/away/offline) e eventos globais de navegação.',
         details: [
-            '✅ ThemeProvider configurado com next-themes',
-            '✅ Toggle de tema na sidebar (Light/Dark/System)',
-            '✅ Filtros CSS para logos e imagens em dark mode',
-            '✅ Suporte multi-tenant para desenvolvimento',
-            '✅ Todas as páginas adaptadas (Auth, Dashboard, Settings, Conversations)',
-            '✅ Persistência automática com localStorage'
+            'Status online/away/offline por usuário e organização',
+            'Supervisão de conversa: texto digitado, scroll e ações em tempo real',
+            'Eventos globais: página visitada, cliques, inputs e scroll',
+            'Dois mapas internos: presenceMap (org→usuário) e socketMap (socket→usuário)',
+            'Integração no layout do dashboard via Socket.io'
         ],
         aiGenerated: true
     },
     {
-        id: '2',
-        date: '2024-02-19',
-        version: '1.1.5',
-        type: 'improvement',
-        title: 'Melhorias no Sistema Multi-Tenant',
-        summary: 'Adicionado suporte para desenvolvimento local com detecção automática de organização.',
+        id: '7',
+        date: '2026-02-24',
+        version: '2.4.0',
+        type: 'feature',
+        title: 'Filas Assíncronas com BullMQ + Redis',
+        summary: 'Processamento de mensagens recebidas via webhook movido para filas assíncronas com BullMQ e Redis, garantindo confiabilidade e suporte a retentativas.',
         details: [
-            'Modo desenvolvimento para localhost',
-            'Busca automática por organização "Dev" ou "Desenvolvimento"',
-            'Variável DEV_ORGANIZATION_ID no .env',
-            'Logs detalhados para debug multi-tenant'
+            'Conexão Redis centralizada via variável REDIS_URL',
+            'Fila webhook-messages para Evolution API e WhatsApp Business API',
+            'Deduplicação automática por externalId (evita mensagem duplicada)',
+            'Workers separados: messageWorker e syncWorker',
+            'Página de monitoramento das filas no dashboard (apenas admin/owner)'
+        ],
+        aiGenerated: true
+    },
+    {
+        id: '6',
+        date: '2026-02-24',
+        version: '2.3.0',
+        type: 'feature',
+        title: 'Times de Agentes',
+        summary: 'Novo módulo de times de atendimento com CRUD completo no backend e suporte a atribuição de contatos por time.',
+        details: [
+            'Model Team: id, organizationId, name, description, color',
+            'Model TeamMember: vínculo entre times e membros',
+            'Campo teamId adicionado ao model Contact',
+            'Rotas GET/POST/PATCH/DELETE /teams com listagem de membros',
+            'Eventos SSE conv_updated incluem teamId e teamName'
+        ],
+        aiGenerated: true
+    },
+    {
+        id: '5',
+        date: '2026-02-24',
+        version: '2.2.0',
+        type: 'feature',
+        title: 'Tab "Sem Canal" nas Conversas',
+        summary: 'Contatos sem canal vinculado agora ficam em uma seção exclusiva visível apenas para admin/owner, com dupla camada de segurança no backend e frontend.',
+        details: [
+            'Novo endpoint GET /contacts/no-channel (retorna 403 para não-admin)',
+            'Endpoint GET /contacts filtra automaticamente sem-canal para membros comuns',
+            'Nova tab "# Sem Canal" no painel de conversas (admin/owner only)',
+            'Badge com contagem de contatos sem canal em tempo real',
+            'Filtro inteligente: fonte de dados alternada conforme tab ativa'
+        ],
+        aiGenerated: true
+    },
+    {
+        id: '4',
+        date: '2026-02-23',
+        version: '2.1.1',
+        type: 'bugfix',
+        title: 'Correção do OAuth Facebook (Desktop → Web App)',
+        summary: 'Resolvido erro "The request is invalid because the app is configured as a desktop app" que impedia a autenticação OAuth do Facebook/WhatsApp Business.',
+        details: [
+            'App Meta configurado como Web App (não Desktop)',
+            'URI de redirecionamento OAuth validado no painel Meta',
+            'Callback configurado em /facebook-oauth/callback',
+            'Guia de resolução documentado em RESOLVER-ERRO-OAUTH-FACEBOOK.md'
         ],
         aiGenerated: false
     },
     {
         id: '3',
-        date: '2024-02-18',
-        version: '1.1.0',
-        type: 'feature',
-        title: 'Sistema de Conversas Aprimorado',
-        summary: 'Interface de conversas com suporte a múltiplos canais, tags e atribuição de responsáveis.',
+        date: '2026-02-23',
+        version: '2.1.0',
+        type: 'update',
+        title: 'Páginas de Termos e Política de Privacidade',
+        summary: 'Adicionadas páginas públicas de Termos de Uso e Política de Privacidade, necessárias para o processo de aprovação do App Meta.',
         details: [
-            'Filtros por canal e tag',
-            'Sistema de atribuição de conversas',
-            'Status de conversas (Abertas, Resolvidas, Pendentes)',
-            'Visualização de mídia inline',
-            'Notificações em tempo real via SSE'
+            'Página /terms — Termos de Uso',
+            'Página /privacy — Política de Privacidade',
+            'URLs configuradas no App Meta para aprovação de permissões'
+        ],
+        aiGenerated: false
+    },
+    {
+        id: '2',
+        date: '2026-02-20',
+        version: '2.0.0',
+        type: 'feature',
+        title: 'WhatsApp Business API (Meta) + Engine de Atribuição',
+        summary: 'Suporte completo à WhatsApp Business API oficial do Meta com processamento de webhooks e engine de atribuição automática de contatos a agentes.',
+        details: [
+            'Recebimento e processamento de mensagens via webhook Meta',
+            'Criação automática de contato na primeira mensagem recebida',
+            'Engine de atribuição: regras configuráveis por organização',
+            'Email templates e templates presets para campanhas',
+            'Rotas de relatórios e copilot (IA assistente) implementadas'
+        ],
+        aiGenerated: true
+    },
+    {
+        id: '1',
+        date: '2026-02-19',
+        version: '1.0.0',
+        type: 'feature',
+        title: 'Lançamento da Plataforma MatraChat',
+        summary: 'Versão inicial da plataforma com multi-tenant, canais de atendimento, sistema de conversas, campanhas e copilot de IA.',
+        details: [
+            'Multi-tenant com organizações isoladas (Better Auth)',
+            'Canais: WhatsApp (Evolution API), Facebook, API genérica',
+            'Sistema de conversas com tags, atribuição e status',
+            'Campanhas de mensagens em massa',
+            'Copilot com IA para sugestão de respostas',
+            'Notificações em tempo real via SSE + Socket.io'
         ],
         aiGenerated: false
     }
@@ -85,27 +163,41 @@ const upcomingFeatures: LogEntry[] = [
         id: 'u1',
         date: 'Em breve',
         type: 'upcoming',
-        title: 'Sistema de Kanban para Conversas',
-        summary: 'Visualização em kanban para gerenciar conversas por status, com drag & drop.',
+        title: 'Supervisão de Agentes em Tempo Real',
+        summary: 'Painel para supervisores acompanharem o que cada agente está fazendo em tempo real: conversa ativa, texto sendo digitado e histórico de ações.',
         details: [
-            'Colunas customizáveis por status',
-            'Drag & drop para mover conversas',
-            'Filtros avançados',
-            'Métricas em tempo real'
+            'Visualização de conversa ativa por agente',
+            'Texto digitado em tempo real (screen sharing)',
+            'Histórico de ações e navegação do agente',
+            'Filtro por time e status (online/away/offline)'
         ],
         aiGenerated: true
     },
     {
         id: 'u2',
+        date: 'Em breve',
+        type: 'upcoming',
+        title: 'Atribuição Automática por Time',
+        summary: 'Regras de atribuição que direcionam novos contatos automaticamente para o time correto com base em canal, horário ou palavra-chave.',
+        details: [
+            'Regras por canal de origem',
+            'Distribuição round-robin dentro do time',
+            'Prioridade por disponibilidade (online first)',
+            'Histórico de atribuições automáticas'
+        ],
+        aiGenerated: true
+    },
+    {
+        id: 'u3',
         date: 'Planejado',
         type: 'upcoming',
-        title: 'Integração com WhatsApp Business API',
-        summary: 'Suporte oficial para WhatsApp Business API com templates e botões interativos.',
+        title: 'Relatórios Avançados de Atendimento',
+        summary: 'Dashboard de métricas com TMA (tempo médio de atendimento), TME (tempo médio de espera), volume por canal e desempenho por agente.',
         details: [
-            'Templates de mensagem aprovados',
-            'Botões interativos',
-            'Listas de seleção',
-            'Métricas de entrega e leitura'
+            'TMA e TME por agente e por time',
+            'Volume de atendimentos por canal e período',
+            'Taxa de resolução no primeiro contato',
+            'Exportação em CSV e PDF'
         ],
         aiGenerated: true
     }
