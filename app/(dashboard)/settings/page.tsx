@@ -3409,7 +3409,7 @@ function TeamsTab({ org }: { org: Org }) {
         setLoading(true)
         Promise.all([
             api.get('/teams'),
-            api.get('/users'),
+            api.get(`/organizations/${org.id}/members`),
         ]).then(([teamsRes, membersRes]) => {
             setTeams(teamsRes.data)
             setMembers(membersRes.data ?? [])
