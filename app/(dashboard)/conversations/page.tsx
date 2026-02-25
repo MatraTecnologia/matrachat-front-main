@@ -79,6 +79,7 @@ type LocalMessage = {
     channelId?: string   // canal de origem (para buscar mídia)
     status: 'sending' | 'sent' | 'error'
     createdAt: Date
+    agent?: { id: string; name: string; image?: string | null } | null
 }
 
 type ConvStatus = 'all' | 'open' | 'resolved' | 'pending'
@@ -1609,6 +1610,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [userName, setUserName] = useState<string>('')
     const [userEmail, setUserEmail] = useState<string>('')
     const [userPhone, setUserPhone] = useState<string>('')
+    const [currentAgentId, setCurrentAgentId]       = useState<string | null>(null)
+    const [currentAgentImage, setCurrentAgentImage] = useState<string | null>(null)
 
     // Carregar assinatura do usuário
     useEffect(() => {
@@ -1619,6 +1622,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 setUserName(data.name || '')
                 setUserEmail(data.email || '')
                 setUserPhone(data.phone || '')
+                setCurrentAgentId(data.id || null)
+                setCurrentAgentImage(data.image || null)
             })
             .catch(() => null)
     }, [])
@@ -1644,7 +1649,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             .catch(() => null)
     }, [orgId])
 
-    function parseMessages(raw: Array<{ id: string; content: string; type: string; direction: string; status: string; createdAt: string; channelId?: string | null }>): LocalMessage[] {
+    function parseMessages(raw: Array<{ id: string; content: string; type: string; direction: string; status: string; createdAt: string; channelId?: string | null; user?: { id: string; name: string; image?: string | null } | null }>): LocalMessage[] {
         const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'] as const
         return raw.map((m) => ({
             id: m.id,
@@ -1654,6 +1659,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             channelId: m.channelId ?? undefined,
             status: m.status as LocalMessage['status'],
             createdAt: new Date(m.createdAt),
+            agent: m.user ?? null,
         }))
     }
 
@@ -1974,7 +1980,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             mediaType,
             mediaUrl: mediaPreview,
             status: 'sending',
-            createdAt: new Date()
+            createdAt: new Date(),
+            agent: currentAgentId ? { id: currentAgentId, name: userName, image: currentAgentImage } : null,
         }
 
         setMessages((prev) => [...prev, optimistic])
@@ -2032,7 +2039,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         const textWithSignature = applySignature(text)
 
         const tempId = crypto.randomUUID()
-        const optimistic: LocalMessage = { id: tempId, text: textWithSignature, type: 'reply', status: 'sending', createdAt: new Date() }
+        const optimistic: LocalMessage = { id: tempId, text: textWithSignature, type: 'reply', status: 'sending', createdAt: new Date(), agent: currentAgentId ? { id: currentAgentId, name: userName, image: currentAgentImage } : null }
         setMessages((prev) => [...prev, optimistic])
         setReply('')
         setSending(true)
@@ -2360,54 +2367,96 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                         </div>
                     </div>
                 )}
-                {!loadingMsgs && messages.map((msg) => {
-                    const isOutbound = msg.type === 'reply' || msg.type === 'note'
-                    return (
-                        <div key={msg.id} className={cn('flex', isOutbound ? 'justify-end' : 'justify-start')}>
-                            {!isOutbound && (
-                                <Avatar className="h-6 w-6 mr-2 shrink-0 self-end">
-                                    {contact.avatarUrl && <AvatarImage src={contact.avatarUrl} />}
-                                    <AvatarFallback className="text-[10px] bg-muted">{initials(contact.name)}</AvatarFallback>
-                                </Avatar>
-                            )}
-                            <div className={cn(
-                                'max-w-[70%] rounded-2xl px-3 py-2 text-sm',
-                                msg.type === 'note'
-                                    ? 'bg-amber-50 border border-amber-200 text-amber-900'
-                                    : isOutbound
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-muted text-foreground'
-                            )}>
-                                {msg.type === 'note' && (
-                                    <p className="text-[10px] font-semibold text-amber-600 mb-0.5">Nota interna</p>
+                {!loadingMsgs && (() => {
+                    // Helpers para divisor de dia
+                    function dayLabel(d: Date): string {
+                        const today = new Date()
+                        const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+                        if (d.toDateString() === today.toDateString())     return 'Hoje'
+                        if (d.toDateString() === yesterday.toDateString()) return 'Ontem'
+                        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+                    }
+                    let lastDay = ''
+                    return messages.map((msg) => {
+                        const isOutbound = msg.type === 'reply' || msg.type === 'note'
+                        const msgDay = msg.createdAt.toDateString()
+                        const showDivider = msgDay !== lastDay
+                        lastDay = msgDay
+                        return (
+                            <div key={msg.id}>
+                                {/* Divisor de dia */}
+                                {showDivider && (
+                                    <div className="flex items-center gap-2 my-3">
+                                        <div className="flex-1 h-px bg-border" />
+                                        <span className="text-[11px] text-muted-foreground font-medium px-2 shrink-0">
+                                            {dayLabel(msg.createdAt)}
+                                        </span>
+                                        <div className="flex-1 h-px bg-border" />
+                                    </div>
                                 )}
-                                {msg.mediaType && (
-                                    <MediaBubble
-                                        messageId={msg.id}
-                                        channelId={msg.channelId ?? selectedChannel?.id ?? ''}
-                                        mediaType={msg.mediaType}
-                                        caption={msg.text}
-                                        mediaUrl={msg.mediaUrl}
-                                    />
-                                )}
-                                {!msg.mediaType && <WhatsAppFormattedText text={msg.text} />}
-                                <div className="flex items-center justify-end gap-1 mt-1">
-                                    <span className={cn('text-[10px]',
-                                        msg.type === 'note' ? 'text-amber-500' :
-                                        isOutbound ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                                    )}>
-                                        {msg.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                    {isOutbound && msg.type !== 'note' && (
-                                        msg.status === 'sending' ? <Clock className="h-3 w-3 text-primary-foreground/70" /> :
-                                        msg.status === 'sent'    ? <CheckCheck className="h-3 w-3 text-primary-foreground/70" /> :
-                                        <span className="text-[10px] text-red-300">!</span>
+                                <div className={cn('flex items-end gap-1.5', isOutbound ? 'justify-end' : 'justify-start')}>
+                                    {/* Avatar do contato (inbound) */}
+                                    {!isOutbound && (
+                                        <Avatar className="h-6 w-6 shrink-0">
+                                            {contact.avatarUrl && <AvatarImage src={contact.avatarUrl} />}
+                                            <AvatarFallback className="text-[10px] bg-muted">{initials(contact.name)}</AvatarFallback>
+                                        </Avatar>
+                                    )}
+                                    <div className={cn('max-w-[70%]', isOutbound ? 'flex flex-col items-end' : 'flex flex-col items-start')}>
+                                        {/* Nome do agente (outbound) */}
+                                        {isOutbound && msg.agent?.name && (
+                                            <span className="text-[10px] text-muted-foreground mb-0.5 px-1">{msg.agent.name}</span>
+                                        )}
+                                        <div className={cn(
+                                            'rounded-2xl px-3 py-2 text-sm',
+                                            msg.type === 'note'
+                                                ? 'bg-amber-50 border border-amber-200 text-amber-900'
+                                                : isOutbound
+                                                    ? 'bg-primary text-primary-foreground'
+                                                    : 'bg-muted text-foreground'
+                                        )}>
+                                            {msg.type === 'note' && (
+                                                <p className="text-[10px] font-semibold text-amber-600 mb-0.5">Nota interna</p>
+                                            )}
+                                            {msg.mediaType && (
+                                                <MediaBubble
+                                                    messageId={msg.id}
+                                                    channelId={msg.channelId ?? selectedChannel?.id ?? ''}
+                                                    mediaType={msg.mediaType}
+                                                    caption={msg.text}
+                                                    mediaUrl={msg.mediaUrl}
+                                                />
+                                            )}
+                                            {!msg.mediaType && <WhatsAppFormattedText text={msg.text} />}
+                                            <div className="flex items-center justify-end gap-1 mt-1">
+                                                <span className={cn('text-[10px]',
+                                                    msg.type === 'note' ? 'text-amber-500' :
+                                                    isOutbound ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                                                )}>
+                                                    {msg.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                                {isOutbound && msg.type !== 'note' && (
+                                                    msg.status === 'sending' ? <Clock className="h-3 w-3 text-primary-foreground/70" /> :
+                                                    msg.status === 'sent'    ? <CheckCheck className="h-3 w-3 text-primary-foreground/70" /> :
+                                                    <span className="text-[10px] text-red-300">!</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Avatar do agente (outbound) */}
+                                    {isOutbound && (
+                                        <Avatar className="h-6 w-6 shrink-0">
+                                            {msg.agent?.image && <AvatarImage src={msg.agent.image} />}
+                                            <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
+                                                {initials(msg.agent?.name ?? '?')}
+                                            </AvatarFallback>
+                                        </Avatar>
                                     )}
                                 </div>
                             </div>
-                        </div>
-                    )
-                })}
+                        )
+                    })
+                })()}
                 <div ref={messagesEndRef} />
             </div>
 
