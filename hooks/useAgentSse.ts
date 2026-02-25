@@ -17,6 +17,8 @@ export type SseNewMessage = {
         status: string
         channelId?: string | null
         createdAt: string
+        /** Agente que enviou — preenchido apenas para mensagens outbound do painel */
+        user?: { id: string; name: string; image?: string | null } | null
     }
     contact?: {
         id: string

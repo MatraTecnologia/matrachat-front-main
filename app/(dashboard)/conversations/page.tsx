@@ -1549,7 +1549,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     orgId: string
     members: MemberRef[]
     onContactUpdated: (updated: Partial<Contact> & { id: string }) => void
-    incomingMessage?: { id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null
+    incomingMessage?: { id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null } | null
     canSend?: boolean
     canAssignConversations?: boolean
     onBack?: () => void
@@ -1797,21 +1797,23 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages])
 
-    // Append inbound message when pushed from parent SSE handler
+    // Append message when pushed from parent SSE handler (inbound ou outbound de outro agente)
     useEffect(() => {
         if (!incomingMessage) return
         setMessages((prev) => {
             if (prev.find((m) => m.id === incomingMessage.id)) return prev
             const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'] as const
             const inMT = incomingMessage.type as string
+            const isOutbound = incomingMessage.direction === 'outbound'
             return [...prev, {
                 id: incomingMessage.id,
                 text: incomingMessage.content,
-                type: 'inbound' as const,
+                type: isOutbound ? 'reply' as const : 'inbound' as const,
                 mediaType: MEDIA_TYPES.includes(inMT as typeof MEDIA_TYPES[number]) ? inMT as LocalMessage['mediaType'] : undefined,
                 channelId: incomingMessage.channelId ?? undefined,
                 status: 'sent' as const,
                 createdAt: new Date(incomingMessage.createdAt),
+                agent: isOutbound && incomingMessage.user ? incomingMessage.user : null,
             }]
         })
     }, [incomingMessage])
@@ -2740,7 +2742,7 @@ function ConversationsPageInner() {
     const [allTeams, setAllTeams]     = useState<TeamRef[]>([])   // todos os times (context menu)
     const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
-    const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string } | null>(null)
+    const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null } | null>(null)
     const [notifyNewMessage, setNotifyNewMessage] = useState(true)
     const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
     const [advancedFilterConditions, setAdvancedFilterConditions] = useState<FilterCondition[]>([])
@@ -2897,16 +2899,20 @@ function ConversationsPageInner() {
 
     const handleNewMessage = useCallback((ev: SseNewMessage) => {
         const { contactId, message } = ev
+        // Ignorar mensagens outbound enviadas pelo próprio usuário (já tem UI otimista)
+        if (message.direction === 'outbound' && message.user?.id === userId) return
         if (selectedRef.current?.id === contactId) {
             // Push message into the detail panel
-            setIncoming({ id: message.id, content: message.content, type: message.type, channelId: message.channelId, createdAt: message.createdAt })
+            setIncoming({ id: message.id, content: message.content, type: message.type, channelId: message.channelId, createdAt: message.createdAt, direction: message.direction, user: message.user })
         } else {
-            // Mark as unread
-            setUnreadIds((prev) => {
-                const next = new Map(prev)
-                next.set(contactId, (prev.get(contactId) ?? 0) + 1)
-                return next
-            })
+            // Marca como não lida apenas para mensagens inbound
+            if (message.direction !== 'outbound') {
+                setUnreadIds((prev) => {
+                    const next = new Map(prev)
+                    next.set(contactId, (prev.get(contactId) ?? 0) + 1)
+                    return next
+                })
+            }
         }
         // Resolve canal pelo channelId usando o ref (sem depender de re-render)
         const resolveChannel = (channelId?: string | null): ChannelRef | null => {
