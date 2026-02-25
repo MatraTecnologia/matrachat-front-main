@@ -251,6 +251,7 @@ export default function ContactsPage() {
     const [formOpen, setFormOpen]         = useState(false)
     const [editContact, setEditContact]   = useState<Contact | undefined>()
     const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null)
+    const [selectChannelModal, setSelectChannelModal] = useState<{ open: boolean; contact: Contact | null }>({ open: false, contact: null })
 
     const loadContacts = useCallback(async (id: string, q: string, p: number) => {
         setLoading(true)
@@ -334,6 +335,32 @@ export default function ContactsPage() {
     }
 
     function handleStartConversation(contact: Contact) {
+        // Se já tem canal → vai direto
+        if (contact.channelId) {
+            router.push(`/conversations?contactId=${contact.id}`)
+            return
+        }
+        // Sem canal: se só tem 1 instância conectada → vincula e vai
+        if (waChannels.length === 1) {
+            handleSelectChannelAndStart(contact, waChannels[0])
+            return
+        }
+        // Sem canal e múltiplas instâncias → abre seletor
+        if (waChannels.length > 1) {
+            setSelectChannelModal({ open: true, contact })
+            return
+        }
+        // Sem canal e sem instância conectada → vai assim mesmo (sem WhatsApp)
+        router.push(`/conversations?contactId=${contact.id}`)
+    }
+
+    async function handleSelectChannelAndStart(contact: Contact, channel: ChannelRef) {
+        try {
+            await api.patch(`/contacts/${contact.id}`, { channelId: channel.id })
+        } catch {
+            // não bloqueia — navega mesmo assim
+        }
+        setSelectChannelModal({ open: false, contact: null })
         router.push(`/conversations?contactId=${contact.id}`)
     }
 
@@ -461,6 +488,42 @@ export default function ContactsPage() {
                     orgId={orgId} contact={editContact}
                 />
             )}
+
+            {/* Modal: selecionar instância WhatsApp para iniciar conversa */}
+            <Dialog
+                open={selectChannelModal.open}
+                onOpenChange={(v) => !v && setSelectChannelModal({ open: false, contact: null })}
+            >
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <MessageCircle className="h-5 w-5 text-green-600" />
+                            Selecionar instância
+                        </DialogTitle>
+                        <DialogDescription>
+                            Por qual instância WhatsApp deseja iniciar a conversa com{' '}
+                            <strong>{selectChannelModal.contact?.name}</strong>?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-2 py-1">
+                        {waChannels.map((ch) => (
+                            <button
+                                key={ch.id}
+                                onClick={() => selectChannelModal.contact && handleSelectChannelAndStart(selectChannelModal.contact, ch)}
+                                className="flex items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm hover:bg-muted transition-colors"
+                            >
+                                <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
+                                <span className="font-medium">{ch.name}</span>
+                            </button>
+                        ))}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setSelectChannelModal({ open: false, contact: null })}>
+                            Cancelar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
                 <AlertDialogContent>
