@@ -59,7 +59,7 @@ type Channel = {
     config?: {
         apiKey?: string
         instanceName?: string
-        evolutionUrl?: string
+        uazapiUrl?: string
         phone?: string
         profilePictureUrl?: string
         widgetConfig?: Partial<WidgetConfig>
@@ -120,7 +120,7 @@ function typeIcon(type: ChannelType) {
 }
 
 function typeLabel(type: ChannelType) {
-    if (type === 'whatsapp') return 'WhatsApp (Evolution)'
+    if (type === 'whatsapp') return 'WhatsApp (UAZAPI)'
     if (type === 'whatsapp-business') return 'WhatsApp Business API'
     return 'API Externa'
 }
@@ -494,81 +494,16 @@ function IframeEmbedDialog({
 
 // ─── Webhook Info Card ────────────────────────────────────────────────────────
 
-const WA_EVENTS = [
-    'MESSAGES_UPSERT',
-    'CONNECTION_UPDATE',
-    'LABELS_ASSOCIATION',
-    'CONTACTS_UPSERT',
-    'CONTACTS_UPDATE',
-    'LABELS_EDIT',
-]
-
 function WebhookInfoCard() {
-    const webhookUrl = `${API_URL}/channels/whatsapp/webhook`
-    const [copiedUrl, setCopiedUrl] = useState(false)
-    const [copiedEvent, setCopiedEvent] = useState<string | null>(null)
-
-    function copyUrl() {
-        navigator.clipboard.writeText(webhookUrl)
-        setCopiedUrl(true)
-        setTimeout(() => setCopiedUrl(false), 2000)
-    }
-
-    function copyEvent(evt: string) {
-        navigator.clipboard.writeText(evt)
-        setCopiedEvent(evt)
-        setTimeout(() => setCopiedEvent(null), 2000)
-    }
-
     return (
-        <div className="rounded-xl border border-green-200 bg-green-50/60 p-4 space-y-3">
+        <div className="rounded-xl border border-green-200 bg-green-50/60 p-4 space-y-2">
             <div className="flex items-center gap-2">
                 <Plug className="h-4 w-4 text-green-700" />
-                <span className="text-sm font-semibold text-green-800">Configuração do Webhook</span>
+                <span className="text-sm font-semibold text-green-800">Webhook</span>
             </div>
             <p className="text-xs text-green-700 leading-relaxed">
-                Configure o webhook abaixo na sua instância Evolution API para receber mensagens e atualizações em tempo real.
+                O webhook é configurado automaticamente ao conectar a instância. Nenhuma ação manual é necessária.
             </p>
-
-            {/* URL */}
-            <div className="space-y-1">
-                <p className="text-xs font-medium text-green-800">URL do Webhook</p>
-                <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-white px-3 py-2">
-                    <code className="flex-1 truncate font-mono text-xs text-foreground">{webhookUrl}</code>
-                    <button
-                        onClick={copyUrl}
-                        className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        title="Copiar URL"
-                    >
-                        {copiedUrl
-                            ? <><Check className="h-3.5 w-3.5 text-green-600" /><span className="text-green-600">Copiado</span></>
-                            : <><Copy className="h-3.5 w-3.5" /><span>Copiar</span></>
-                        }
-                    </button>
-                </div>
-            </div>
-
-            {/* Events */}
-            <div className="space-y-1.5">
-                <p className="text-xs font-medium text-green-800">Eventos a ativar</p>
-                <div className="flex flex-wrap gap-1.5">
-                    {WA_EVENTS.map((evt) => (
-                        <button
-                            key={evt}
-                            onClick={() => copyEvent(evt)}
-                            title="Clique para copiar"
-                            className="flex items-center gap-1 rounded-md border border-green-200 bg-white px-2 py-0.5 font-mono text-[11px] text-green-800 hover:bg-green-100 transition-colors"
-                        >
-                            {copiedEvent === evt
-                                ? <Check className="h-2.5 w-2.5 text-green-600" />
-                                : <Copy className="h-2.5 w-2.5 opacity-50" />
-                            }
-                            {evt}
-                        </button>
-                    ))}
-                </div>
-                <p className="text-[11px] text-green-700 opacity-80">Clique em cada evento para copiar o nome.</p>
-            </div>
         </div>
     )
 }
@@ -730,9 +665,9 @@ function AddChannelDialog({
     // WhatsApp form
     const [waName, setWaName] = useState('')
     const [waUrl, setWaUrl] = useState('')
-    const [waKey, setWaKey] = useState('')
+    const [waAdminToken, setWaAdminToken] = useState('')
     const [waLoading, setWaLoading] = useState(false)
-    const [hasDefaultKey, setHasDefaultKey] = useState(false)
+    const [hasDefaultAdminToken, setHasDefaultAdminToken] = useState(false)
 
     // WhatsApp Business form
     const [wabName, setWabName] = useState('')
@@ -742,12 +677,12 @@ function AddChannelDialog({
     const [wabBusinessAccountId, setWabBusinessAccountId] = useState('')
     const [wabLoading, setWabLoading] = useState(false)
 
-    // Pré-preenche URL e key com os defaults do servidor (env vars)
+    // Pré-preenche URL e admin token com os defaults do servidor (env vars)
     useEffect(() => {
-        api.get('/channels/evolution-defaults')
+        api.get('/channels/uazapi-defaults')
             .then(({ data }) => {
-                if (data.evolutionUrl) setWaUrl(data.evolutionUrl)
-                if (data.hasDefaultKey) setHasDefaultKey(true)
+                if (data.uazapiUrl) setWaUrl(data.uazapiUrl)
+                if (data.hasDefaultAdminToken) setHasDefaultAdminToken(true)
             })
             .catch(() => null)
     }, [])
@@ -761,7 +696,7 @@ function AddChannelDialog({
 
     function reset() {
         setStep('pick-type')
-        setApiName(''); setWaName(''); setWaUrl(''); setWaKey('')
+        setApiName(''); setWaName(''); setWaUrl(''); setWaAdminToken('')
         setWabName(''); setWabPhoneNumberId(''); setWabAccessToken(''); setWabWebhookVerifyToken(''); setWabBusinessAccountId('')
         setQrBase64(null); setConnected(false)
         if (pollInterval) clearInterval(pollInterval)
@@ -790,7 +725,7 @@ function AddChannelDialog({
 
     // ── WhatsApp channel ─────────────────────────────────────────────────────
     async function createWhatsAppChannel() {
-        if (!waName.trim() || !waUrl.trim() || (!waKey.trim() && !hasDefaultKey)) {
+        if (!waName.trim() || !waUrl.trim() || (!waAdminToken.trim() && !hasDefaultAdminToken)) {
             toast.error('Preencha todos os campos.')
             return
         }
@@ -799,14 +734,14 @@ function AddChannelDialog({
             const { data } = await api.post('/channels', {
                 name: waName.trim(),
                 type: 'whatsapp',
-                evolutionUrl: waUrl.trim(),
-                evolutionApiKey: waKey.trim(),
+                uazapiUrl: waUrl.trim(),
+                uazapiAdminToken: waAdminToken.trim(),
             })
             setChannelId(data.id)
             await fetchQrCode(data.id)
             setStep('whatsapp-qr')
         } catch {
-            toast.error('Erro ao criar canal. Verifique a URL e API key da Evolution API.')
+            toast.error('Erro ao criar canal. Verifique a URL e Admin Token do UAZAPI.')
         } finally {
             setWaLoading(false)
         }
@@ -1047,9 +982,9 @@ function AddChannelDialog({
                                     <MessageCircle className="h-6 w-6 text-green-600" />
                                 </div>
                                 <div>
-                                    <p className="font-semibold text-sm">WhatsApp (Evolution API)</p>
+                                    <p className="font-semibold text-sm">WhatsApp (UAZAPI)</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                        Conecte via Evolution API com QR code (não-oficial)
+                                        Conecte via UAZAPI com QR code (não-oficial)
                                     </p>
                                 </div>
                             </button>
@@ -1111,10 +1046,10 @@ function AddChannelDialog({
                     <>
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2">
-                                <MessageCircle className="h-5 w-5 text-green-600" /> WhatsApp (Evolution)
+                                <MessageCircle className="h-5 w-5 text-green-600" /> WhatsApp (UAZAPI)
                             </DialogTitle>
                             <DialogDescription>
-                                Informe os dados da sua instância Evolution API.
+                                Informe os dados da sua instância UAZAPI.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-3 mt-2">
@@ -1123,20 +1058,20 @@ function AddChannelDialog({
                                 <Input placeholder="ex: Suporte WhatsApp" value={waName} onChange={(e) => setWaName(e.target.value)} />
                             </div>
                             <div className="space-y-1.5">
-                                <Label>URL da Evolution API</Label>
-                                <Input placeholder="https://evolution.suaempresa.com" value={waUrl} onChange={(e) => setWaUrl(e.target.value)} />
+                                <Label>URL do UAZAPI</Label>
+                                <Input placeholder="https://suaempresa.uazapi.com" value={waUrl} onChange={(e) => setWaUrl(e.target.value)} />
                             </div>
                             <div className="space-y-1.5">
-                                <Label>API Key global</Label>
+                                <Label>Admin Token</Label>
                                 <Input
-                                    placeholder={hasDefaultKey ? '(usando chave padrão do servidor)' : 'sua-api-key'}
+                                    placeholder={hasDefaultAdminToken ? '(usando token padrão do servidor)' : 'seu-admin-token'}
                                     type="password"
-                                    value={waKey}
-                                    onChange={(e) => setWaKey(e.target.value)}
+                                    value={waAdminToken}
+                                    onChange={(e) => setWaAdminToken(e.target.value)}
                                 />
-                                {hasDefaultKey && !waKey && (
+                                {hasDefaultAdminToken && !waAdminToken && (
                                     <p className="text-[11px] text-muted-foreground">
-                                        Chave padrão configurada no servidor. Deixe em branco para usá-la.
+                                        Admin token padrão configurado no servidor. Deixe em branco para usá-lo.
                                     </p>
                                 )}
                             </div>
@@ -1419,7 +1354,7 @@ function AddChannelDialog({
                                 <div className="flex h-48 w-48 flex-col items-center justify-center rounded-xl border bg-muted gap-2">
                                     <WifiOff className="h-8 w-8 text-muted-foreground" />
                                     <p className="text-xs text-muted-foreground text-center px-4">
-                                        Não foi possível gerar o QR code. Verifique sua Evolution API.
+                                        Não foi possível gerar o QR code. Verifique sua instância UAZAPI.
                                     </p>
                                 </div>
                             )}
@@ -1749,7 +1684,7 @@ export default function ChannelsPage() {
                             <section className="space-y-3">
                                 <div className="flex items-center gap-2">
                                     <MessageCircle className="h-4 w-4 text-green-600" />
-                                    <h2 className="text-sm font-semibold">WhatsApp (Evolution API)</h2>
+                                    <h2 className="text-sm font-semibold">WhatsApp (UAZAPI)</h2>
                                     <Badge variant="secondary" className="text-xs">{whatsapp.length}</Badge>
                                 </div>
                                 {whatsapp.map((ch) => (
