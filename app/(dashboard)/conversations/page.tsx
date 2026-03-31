@@ -9,7 +9,7 @@ import {
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
     CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
-    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar, Users, UsersRound, ArrowLeft, Square,
+    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar as CalendarIcon, CalendarDays, Users, UsersRound, ArrowLeft, Square,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,6 +41,11 @@ import { toast } from 'sonner'
 import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 import { usePresenceContext } from '@/contexts/presence-context'
 import { AdvancedFilters, type FilterCondition } from '@/components/AdvancedFilters'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+import type { DateRange } from 'react-day-picker'
 import { TemplateAutocomplete } from '@/components/TemplateAutocomplete'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
@@ -577,6 +582,7 @@ function ConversationList({
     orgId, onContactUpdated, userRole, members,
     advancedFilterConditions, onOpenAdvancedFilters, loadMore, hasMore, loadingMore, canAssignConversations,
     teams, allTeams, activeTeamId, onTeamChange,
+    dateRange, onDateRangeChange,
 }: {
     contacts: Contact[]
     noChannelContacts: Contact[]
@@ -610,6 +616,8 @@ function ConversationList({
     allTeams: TeamRef[]
     activeTeamId: string | null
     onTeamChange: (teamId: string | null) => void
+    dateRange?: DateRange
+    onDateRangeChange: (range: DateRange | undefined) => void
 }) {
     const [search, setSearch] = useState('')
     const [modalContact, setModalContact] = useState<Contact | null>(null)
@@ -1094,6 +1102,41 @@ function ConversationList({
                             </DropdownMenuContent>
                         </DropdownMenu>
                     )}
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn('h-6 w-6 relative', dateRange?.from && 'text-primary')}
+                            >
+                                <CalendarDays className="h-3.5 w-3.5" />
+                                {dateRange?.from && (
+                                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+                                )}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                                mode="range"
+                                selected={dateRange}
+                                onSelect={onDateRangeChange}
+                                numberOfMonths={1}
+                                locale={ptBR}
+                                disabled={{ after: new Date() }}
+                            />
+                            {dateRange?.from && (
+                                <div className="border-t px-3 py-2 flex items-center justify-between">
+                                    <span className="text-xs text-muted-foreground">
+                                        {format(dateRange.from, 'dd/MM/yy', { locale: ptBR })}
+                                        {dateRange.to ? ` — ${format(dateRange.to, 'dd/MM/yy', { locale: ptBR })}` : ''}
+                                    </span>
+                                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => onDateRangeChange(undefined)}>
+                                        Limpar
+                                    </Button>
+                                </div>
+                            )}
+                        </PopoverContent>
+                    </Popover>
                     <Button
                         variant="ghost"
                         size="icon"
@@ -1124,6 +1167,24 @@ function ConversationList({
                         onClick={() => onChannelFilterChange(null)}
                         className="text-muted-foreground hover:text-foreground transition-colors"
                         title="Ver todos os canais"
+                    >
+                        <X className="h-3 w-3" />
+                    </button>
+                </div>
+            )}
+
+            {/* Active date range filter badge */}
+            {dateRange?.from && (
+                <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/30">
+                    <CalendarDays className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="text-[11px] font-medium truncate flex-1">
+                        {format(dateRange.from, 'dd/MM/yy', { locale: ptBR })}
+                        {dateRange.to ? ` — ${format(dateRange.to, 'dd/MM/yy', { locale: ptBR })}` : ''}
+                    </span>
+                    <button
+                        onClick={() => onDateRangeChange(undefined)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        title="Remover filtro de data"
                     >
                         <X className="h-3 w-3" />
                     </button>
@@ -1565,6 +1626,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [mediaCaption, setMediaCaption] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    const [msgDateFilter, setMsgDateFilter] = useState<DateRange | undefined>(undefined)
+
     const [recording, setRecording] = useState(false)
     const [recordingTime, setRecordingTime] = useState(0)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -1650,11 +1713,20 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         }))
     }
 
-    function loadMessages(contactId: string) {
+    function loadMessages(contactId: string, dateFilter?: DateRange) {
         setLoadingMsgs(true)
         setHasMore(false)
         oldestDateRef.current = null
-        api.get('/messages', { params: { contactId, limit: 50 } })
+        const params: Record<string, unknown> = { contactId, limit: 50 }
+        if (dateFilter?.from) {
+            params.after = dateFilter.from.toISOString()
+            if (dateFilter.to) {
+                const endOfDay = new Date(dateFilter.to)
+                endOfDay.setHours(23, 59, 59, 999)
+                params.before = endOfDay.toISOString()
+            }
+        }
+        api.get('/messages', { params })
             .then(({ data }) => {
                 const msgs = parseMessages(data.messages)
                 setMessages(msgs)
@@ -1672,6 +1744,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         setReply('')
         messageCountRef.current = 0
         if (recording) cancelRecording()
+        setMsgDateFilter(undefined)
         loadMessages(contact.id)
 
         // Ao abrir uma conversa pendente, marca como "open" automaticamente
@@ -1681,6 +1754,10 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 .catch(() => null)
         }
     }, [contact.id])
+
+    useEffect(() => {
+        if (msgDateFilter) loadMessages(contact.id, msgDateFilter)
+    }, [msgDateFilter])
 
     // Tracking de presença - envia evento quando entra/sai da conversa
     useEffect(() => {
@@ -2357,6 +2434,47 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                         </DropdownMenuContent>
                     </DropdownMenu>}
 
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn('h-8 w-8 relative', msgDateFilter?.from && 'text-primary')}
+                            >
+                                <CalendarDays className="h-4 w-4" />
+                                {msgDateFilter?.from && (
+                                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
+                                )}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                                mode="range"
+                                selected={msgDateFilter}
+                                onSelect={setMsgDateFilter}
+                                numberOfMonths={1}
+                                locale={ptBR}
+                                disabled={{ after: new Date() }}
+                            />
+                            {msgDateFilter?.from && (
+                                <div className="border-t px-3 py-2 flex items-center justify-between">
+                                    <span className="text-xs text-muted-foreground">
+                                        {format(msgDateFilter.from, 'dd/MM/yy', { locale: ptBR })}
+                                        {msgDateFilter.to ? ` — ${format(msgDateFilter.to, 'dd/MM/yy', { locale: ptBR })}` : ''}
+                                    </span>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-xs"
+                                        onClick={() => { setMsgDateFilter(undefined); loadMessages(contact.id) }}
+                                    >
+                                        Limpar
+                                    </Button>
+                                </div>
+                            )}
+                        </PopoverContent>
+                    </Popover>
+
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -2418,6 +2536,23 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                     </DropdownMenu>
                 </div>
             </div>
+
+            {/* Banner de filtro por data ativo */}
+            {msgDateFilter?.from && (
+                <div className="flex items-center gap-2 px-4 py-1.5 border-b bg-muted/30">
+                    <CalendarDays className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="text-[11px] font-medium flex-1">
+                        Filtrando: {format(msgDateFilter.from, 'dd/MM/yy', { locale: ptBR })}
+                        {msgDateFilter.to ? ` — ${format(msgDateFilter.to, 'dd/MM/yy', { locale: ptBR })}` : ''}
+                    </span>
+                    <button
+                        onClick={() => { setMsgDateFilter(undefined); loadMessages(contact.id) }}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                        <X className="h-3 w-3" />
+                    </button>
+                </div>
+            )}
 
             {/* Área de mensagens */}
             <div ref={msgListRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
@@ -2868,6 +3003,7 @@ function ConversationsPageInner() {
     const [notifyNewMessage, setNotifyNewMessage] = useState(true)
     const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
     const [advancedFilterConditions, setAdvancedFilterConditions] = useState<FilterCondition[]>([])
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
     const [reconnectModal, setReconnectModal] = useState<{ open: boolean; contact: Contact | null; channel: ChannelRef | null }>({
         open: false,
         contact: null,
@@ -2885,8 +3021,9 @@ function ConversationsPageInner() {
                     page,
                     hasMessages: true,
                     ...(tId ? { tagId: tId } : {}),
-                    // Se não é admin/owner OU se ownOnly está ativo, filtra por usuário
-                    ...((shouldFilterByUser || ownOnly) && userId ? { assignedToUserId: userId } : {})
+                    ...((shouldFilterByUser || ownOnly) && userId ? { assignedToUserId: userId } : {}),
+                    ...(dateRange?.from ? { dateFrom: dateRange.from.toISOString() } : {}),
+                    ...(dateRange?.to ? { dateTo: dateRange.to.toISOString() } : {}),
                 },
             })
             if (page === 1) {
@@ -2904,7 +3041,7 @@ function ConversationsPageInner() {
             if (page === 1) setLoading(false)
             else            setLoadingMore(false)
         }
-    }, [shouldFilterByUser, ownOnly, userId])
+    }, [shouldFilterByUser, ownOnly, userId, dateRange])
 
     const loadMoreContacts = useCallback(() => {
         if (!contactsHasMore || loadingMore || loading) return
@@ -3252,6 +3389,8 @@ function ConversationsPageInner() {
                         allTeams={allTeams}
                         activeTeamId={activeTeamId}
                         onTeamChange={setActiveTeamId}
+                        dateRange={dateRange}
+                        onDateRangeChange={setDateRange}
                     />
                 </div>
 
