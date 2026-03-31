@@ -1428,25 +1428,23 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
                     ) : (
                         <a href={src} download className="underline text-xs">{caption || label[mediaType]}</a>
                     )
+                ) : unavailable ? (
+                    <span className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-50">
+                        {label[mediaType]} indisponivel
+                    </span>
                 ) : (
-                    {unavailable ? (
-                        <span className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-50">
-                            {label[mediaType]} indisponivel
-                        </span>
-                    ) : (
-                        <button
-                            onClick={load}
-                            disabled={state === 'loading'}
-                            className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-80 hover:opacity-100 disabled:opacity-50"
-                        >
-                            {state === 'loading' ? (
-                                <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-                            ) : (
-                                <span>⬇</span>
-                            )}
-                            {state === 'error' ? 'Erro — tentar novamente' : `Carregar ${label[mediaType]}`}
-                        </button>
-                    )}
+                    <button
+                        onClick={load}
+                        disabled={state === 'loading'}
+                        className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-80 hover:opacity-100 disabled:opacity-50"
+                    >
+                        {state === 'loading' ? (
+                            <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                        ) : (
+                            <span>⬇</span>
+                        )}
+                        {state === 'error' ? 'Erro — tentar novamente' : `Carregar ${label[mediaType]}`}
+                    </button>
                 )}
                 {caption && state === 'loaded' && mediaType !== 'document' && (
                     <p className="text-xs opacity-80 whitespace-pre-wrap break-words">{caption}</p>
