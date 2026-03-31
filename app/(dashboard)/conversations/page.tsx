@@ -4,12 +4,12 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams, useRouter } from 'next/navigation'
 import {
-    Search, MessageSquare, Send, Paperclip, Smile,
+    Search, MessageSquare, Send, Paperclip, Smile, Mic,
     Check, CheckCheck, Clock, RefreshCw, User, Tag,
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
     CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
-    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar, Users, UsersRound, ArrowLeft,
+    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar, Users, UsersRound, ArrowLeft, Square,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1591,6 +1591,12 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [mediaCaption, setMediaCaption] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    const [recording, setRecording] = useState(false)
+    const [recordingTime, setRecordingTime] = useState(0)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+    const audioChunksRef = useRef<Blob[]>([])
+    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
     // Hook de presença para notificar via WebSocket e supervisão
     const { setViewing, updateScreen, updateInput, sendAction } = usePresenceContext()
 
@@ -1691,6 +1697,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         setContactTags((contact.tags ?? []).map((t) => t.tag))
         setReply('')
         messageCountRef.current = 0
+        if (recording) cancelRecording()
         loadMessages(contact.id)
 
         // Ao abrir uma conversa pendente, marca como "open" automaticamente
@@ -2024,6 +2031,110 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         } catch {
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
             toast.error('Erro ao enviar mídia')
+        } finally {
+            setSending(false)
+        }
+    }
+
+    async function startRecording() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : 'audio/webm'
+            const recorder = new MediaRecorder(stream, { mimeType })
+            audioChunksRef.current = []
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data)
+            }
+            recorder.onstop = () => {
+                stream.getTracks().forEach((t) => t.stop())
+            }
+            mediaRecorderRef.current = recorder
+            recorder.start()
+            setRecording(true)
+            setRecordingTime(0)
+            recordingTimerRef.current = setInterval(() => setRecordingTime((t) => t + 1), 1000)
+        } catch {
+            toast.error('Não foi possível acessar o microfone.')
+        }
+    }
+
+    function cancelRecording() {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.onstop = () => {
+                mediaRecorderRef.current!.stream.getTracks().forEach((t) => t.stop())
+            }
+            mediaRecorderRef.current.stop()
+        }
+        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+        audioChunksRef.current = []
+        setRecording(false)
+        setRecordingTime(0)
+    }
+
+    async function stopAndSendRecording() {
+        if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return
+        if (!selectedChannel) { toast.error('Selecione um canal WhatsApp.'); cancelRecording(); return }
+        if (!contactNumber) { toast.error('Número do contato não encontrado.'); cancelRecording(); return }
+
+        const recorder = mediaRecorderRef.current
+        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+
+        const blob = await new Promise<Blob>((resolve) => {
+            recorder.onstop = () => {
+                recorder.stream.getTracks().forEach((t) => t.stop())
+                resolve(new Blob(audioChunksRef.current, { type: recorder.mimeType }))
+            }
+            recorder.stop()
+        })
+
+        setRecording(false)
+        setRecordingTime(0)
+        audioChunksRef.current = []
+
+        const reader = new FileReader()
+        const base64Full = await new Promise<string>((resolve) => {
+            reader.onload = () => resolve(reader.result as string)
+            reader.readAsDataURL(blob)
+        })
+        const base64Data = base64Full.split(',')[1]
+
+        const tempId = crypto.randomUUID()
+        const optimistic: LocalMessage = {
+            id: tempId,
+            text: '',
+            type: 'reply',
+            mediaType: 'audio',
+            status: 'sending',
+            createdAt: new Date(),
+            agent: currentAgentId ? { id: currentAgentId, name: userName, image: currentAgentImage } : null,
+        }
+        setMessages((prev) => [...prev, optimistic])
+        setSending(true)
+
+        try {
+            const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, {
+                number: contactNumber,
+                mediaMessage: {
+                    mediatype: 'ptt',
+                    fileName: 'audio.webm',
+                    media: base64Data,
+                },
+            })
+            const externalId = response.data?.data?.key?.id || null
+            setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
+            saveMessage({
+                content: '',
+                type: 'audio',
+                direction: 'outbound',
+                channelId: selectedChannel.id,
+                status: 'sent',
+                externalId,
+            })
+        } catch {
+            setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
+            toast.error('Erro ao enviar áudio')
         } finally {
             setSending(false)
         }
@@ -2587,6 +2698,23 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                     className="hidden"
                     onChange={handleFileSelect}
                 />
+                {recording ? (
+                <div className="flex items-center gap-3 rounded-md border px-3 py-3">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={cancelRecording}>
+                        <X className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                    <div className="flex flex-1 items-center justify-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-sm font-medium tabular-nums">
+                            {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:{String(recordingTime % 60).padStart(2, '0')}
+                        </span>
+                        <span className="text-xs text-muted-foreground">Gravando...</span>
+                    </div>
+                    <Button size="icon" className="h-8 w-8 shrink-0" onClick={stopAndSendRecording}>
+                        <Send className="h-4 w-4" />
+                    </Button>
+                </div>
+                ) : (
                 <div className="flex gap-2 items-end">
                     <div className="flex-1 relative">
                         <TemplateAutocomplete
@@ -2622,6 +2750,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                         >
                             <Paperclip className="h-4 w-4 text-muted-foreground" />
                         </Button>
+                        {reply.trim() || replyType === 'note' ? (
                         <Button
                             size="icon"
                             className={cn('h-8 w-8', replyType === 'note' && 'bg-amber-500 hover:bg-amber-600')}
@@ -2630,11 +2759,25 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                         >
                             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         </Button>
+                        ) : (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={sending || !selectedChannel}
+                            onClick={startRecording}
+                        >
+                            <Mic className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        )}
                     </div>
                 </div>
+                )}
+                {!recording && (
                 <p className="mt-1.5 text-[10px] text-muted-foreground">
                     <kbd className="font-mono">Ctrl + Enter</kbd> para enviar
                 </p>
+                )}
                 </>)}
             </div>
 
