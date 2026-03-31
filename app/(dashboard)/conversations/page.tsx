@@ -2961,7 +2961,7 @@ function ConversationsPageInner() {
             if (idx === 0 && !channelChanged) return prev // já no topo e nada mudou
             return [updatedItem, ...updated]
         })
-    }, [])
+    }, [userId])
 
     const handleConvUpdated = useCallback((ev: SseConvUpdated) => {
         const teamPatch = ev.teamId !== undefined
