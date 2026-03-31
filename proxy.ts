@@ -13,7 +13,7 @@ const PUBLIC_PATHS = [
 
 // Em produção (HTTPS) o Better Auth adiciona o prefixo __Secure- automaticamente.
 // Verificamos os dois nomes para cobrir dev (http) e prod (https).
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
     const sessionCookie =
         request.cookies.get('__Secure-better-auth.session_token') ??
