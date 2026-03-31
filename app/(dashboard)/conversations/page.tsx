@@ -1110,43 +1110,7 @@ function ConversationList({
                 </div>
             </div>
 
-            {/* Sync histórico completo — apenas admin/owner */}
-            {(userRole === 'admin' || userRole === 'owner') && (
-                <div className="border-b px-3 py-1.5">
-                    {syncingHistory ? (
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
-                                <span className="text-[11px] text-muted-foreground">Sincronizando histórico...</span>
-                                <span className="ml-auto text-[11px] text-muted-foreground">{syncProgress}%</span>
-                            </div>
-                            <Progress value={syncProgress} className="h-1" />
-                        </div>
-                    ) : syncResult ? (
-                        <div className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" />
-                            <span className="text-[11px] text-muted-foreground flex-1 truncate">
-                                Enfileirado · job {syncResult.jobId?.slice(-6)}
-                            </span>
-                            <button
-                                onClick={() => setSyncResult(null)}
-                                className="text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                                <X className="h-3 w-3" />
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            onClick={handleSyncAllHistory}
-                            disabled={syncingHistory || isSyncPolling}
-                            className="flex w-full items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <RefreshCw className={`h-3 w-3 shrink-0 ${isSyncPolling ? 'animate-spin' : ''}`} />
-                            {isSyncPolling ? 'Sincronizando...' : 'Sincronizar histórico de instâncias'}
-                        </button>
-                    )}
-                </div>
-            )}
+            {/* Sync histórico completo — oculto temporariamente */}
 
             {/* Active channel filter badge */}
             {activeChannel && onChannelFilterChange && (
@@ -2016,8 +1980,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 }
             })
 
-            // Extrai o externalId (message key) do response da Evolution API
-            const externalId = response.data?.data?.key?.id || null
+            const externalId = response.data?.data?.messageid || response.data?.data?.key?.id || null
 
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
             saveMessage({
@@ -2122,7 +2085,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                     media: base64Data,
                 },
             })
-            const externalId = response.data?.data?.key?.id || null
+            const externalId = response.data?.data?.messageid || response.data?.data?.key?.id || null
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
             saveMessage({
                 content: '',
@@ -2167,8 +2130,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         try {
             const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, { number: contactNumber, text: textWithSignature })
 
-            // Extrai o externalId (message key) do response da Evolution API
-            const externalId = response.data?.data?.key?.id || null
+            const externalId = response.data?.data?.messageid || response.data?.data?.key?.id || null
 
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
             saveMessage({
