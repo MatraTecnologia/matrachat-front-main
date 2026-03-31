@@ -5,7 +5,7 @@ WORKDIR /app
 
 RUN apk add --no-cache libc6-compat
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 RUN npm ci
 
 # ─── Stage 2: builder ─────────────────────────────────────────────────────────
