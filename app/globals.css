@@ -137,3 +137,9 @@
 .dark .dark-mode-image-subtle {
   filter: brightness(0.9);
 }
+
+@keyframes msgHighlight {
+  0% { background-color: rgb(254 240 138); }
+  30% { background-color: rgb(254 240 138); }
+  100% { background-color: transparent; }
+}

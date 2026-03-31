@@ -1610,6 +1610,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const msgListRef    = useRef<HTMLDivElement>(null)
     const msgRefsMap    = useRef<Map<string, HTMLDivElement>>(new Map())
     const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null)
+    const highlightTimer = useRef<ReturnType<typeof setTimeout>>(null)
     const [sending, setSending]     = useState(false)
     const [assigning, setAssigning] = useState(false)
     const [resolving, setResolving] = useState(false)
@@ -1705,19 +1706,25 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     }, [orgId])
 
     function scrollToQuoted(quotedExternalId: string) {
-        const target = messages.find(m =>
-            m.externalId === quotedExternalId ||
-            m.externalId?.split(':')[1] === quotedExternalId
-        )
+        const target = messages.find(m => {
+            if (!m.externalId) return false
+            if (m.externalId === quotedExternalId) return true
+            // Inbound: externalId = "owner:messageId", quoted = "messageId"
+            if (m.externalId.endsWith(':' + quotedExternalId)) return true
+            // Outbound: externalId = "messageId" (short), quoted = "messageId"
+            const shortId = m.externalId.includes(':') ? m.externalId.split(':').pop() : m.externalId
+            return shortId === quotedExternalId
+        })
         if (!target) return
         const el = msgRefsMap.current.get(target.id)
         if (!el) return
         el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (highlightTimer.current) clearTimeout(highlightTimer.current)
         setHighlightedMsgId(target.id)
-        setTimeout(() => setHighlightedMsgId(null), 1800)
+        highlightTimer.current = setTimeout(() => setHighlightedMsgId(null), 2500)
     }
 
-    function parseMessages(raw: Array<{ id: string; content: string; type: string; direction: string; status: string; createdAt: string; channelId?: string | null; externalId?: string | null; quotedMessage?: { text: string } | null; user?: { id: string; name: string; image?: string | null } | null }>): LocalMessage[] {
+    function parseMessages(raw: Array<{ id: string; content: string; type: string; direction: string; status: string; createdAt: string; channelId?: string | null; externalId?: string | null; quotedMessage?: { text: string; quotedExternalId?: string | null } | null; user?: { id: string; name: string; image?: string | null } | null }>): LocalMessage[] {
         const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'] as const
         return raw.map((m) => ({
             id: m.id,
@@ -2654,14 +2661,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                         const showDivider = msgDay !== lastDay
                         lastDay = msgDay
                         return (
-                            <div
-                                key={msg.id}
-                                ref={(el) => { if (el) msgRefsMap.current.set(msg.id, el); else msgRefsMap.current.delete(msg.id) }}
-                                className={cn(
-                                    'rounded-lg transition-colors duration-700',
-                                    highlightedMsgId === msg.id ? 'bg-yellow-100' : ''
-                                )}
-                            >
+                            <div key={msg.id} ref={(el) => { if (el) msgRefsMap.current.set(msg.id, el); else msgRefsMap.current.delete(msg.id) }}>
                                 {/* Divisor de dia */}
                                 {showDivider && (
                                     <div className="flex items-center gap-2 my-3">
@@ -2672,7 +2672,10 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                         <div className="flex-1 h-px bg-border" />
                                     </div>
                                 )}
-                                <div className={cn('flex items-end gap-1.5 group', isOutbound ? 'justify-end' : 'justify-start')}>
+                                <div
+                                    className={cn('flex items-end gap-1.5 group rounded-lg py-0.5 px-1 -mx-1', isOutbound ? 'justify-end' : 'justify-start')}
+                                    style={highlightedMsgId === msg.id ? { animation: 'msgHighlight 2.5s ease-out forwards' } : undefined}
+                                >
                                     {/* Avatar do contato (inbound) */}
                                     {!isOutbound && (
                                         <Avatar className="h-6 w-6 shrink-0">
