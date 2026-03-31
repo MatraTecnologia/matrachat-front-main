@@ -20,7 +20,7 @@ export type SseNewMessage = {
         /** Agente que enviou — preenchido apenas para mensagens outbound do painel */
         user?: { id: string; name: string; image?: string | null } | null
         externalId?: string | null
-        quotedMessage?: { text: string } | null
+        quotedMessage?: { text: string; quotedExternalId?: string | null } | null
     }
     contact?: {
         id: string

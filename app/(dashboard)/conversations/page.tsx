@@ -86,7 +86,7 @@ type LocalMessage = {
     createdAt: Date
     agent?: { id: string; name: string; image?: string | null } | null
     externalId?: string | null
-    quotedMessage?: { text: string } | null
+    quotedMessage?: { text: string; quotedExternalId?: string | null } | null
 }
 
 type ConvStatus = 'all' | 'open' | 'resolved' | 'pending'
@@ -1593,7 +1593,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     orgId: string
     members: MemberRef[]
     onContactUpdated: (updated: Partial<Contact> & { id: string }) => void
-    incomingMessage?: { id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null; externalId?: string | null; quotedMessage?: { text: string } | null } | null
+    incomingMessage?: { id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null; externalId?: string | null; quotedMessage?: { text: string; quotedExternalId?: string | null } | null } | null
     canSend?: boolean
     canAssignConversations?: boolean
     onBack?: () => void
@@ -1608,6 +1608,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [hasMore, setHasMore]     = useState(false)
     const oldestDateRef = useRef<string | null>(null)
     const msgListRef    = useRef<HTMLDivElement>(null)
+    const msgRefsMap    = useRef<Map<string, HTMLDivElement>>(new Map())
+    const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null)
     const [sending, setSending]     = useState(false)
     const [assigning, setAssigning] = useState(false)
     const [resolving, setResolving] = useState(false)
@@ -1701,6 +1703,19 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             .then(({ data }) => setAllTags(data))
             .catch(() => null)
     }, [orgId])
+
+    function scrollToQuoted(quotedExternalId: string) {
+        const target = messages.find(m =>
+            m.externalId === quotedExternalId ||
+            m.externalId?.split(':')[1] === quotedExternalId
+        )
+        if (!target) return
+        const el = msgRefsMap.current.get(target.id)
+        if (!el) return
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        setHighlightedMsgId(target.id)
+        setTimeout(() => setHighlightedMsgId(null), 1800)
+    }
 
     function parseMessages(raw: Array<{ id: string; content: string; type: string; direction: string; status: string; createdAt: string; channelId?: string | null; externalId?: string | null; quotedMessage?: { text: string } | null; user?: { id: string; name: string; image?: string | null } | null }>): LocalMessage[] {
         const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'] as const
@@ -2639,7 +2654,14 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                         const showDivider = msgDay !== lastDay
                         lastDay = msgDay
                         return (
-                            <div key={msg.id}>
+                            <div
+                                key={msg.id}
+                                ref={(el) => { if (el) msgRefsMap.current.set(msg.id, el); else msgRefsMap.current.delete(msg.id) }}
+                                className={cn(
+                                    'rounded-lg transition-colors duration-700',
+                                    highlightedMsgId === msg.id ? 'bg-yellow-100' : ''
+                                )}
+                            >
                                 {/* Divisor de dia */}
                                 {showDivider && (
                                     <div className="flex items-center gap-2 my-3">
@@ -2683,12 +2705,16 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                         )}>
                                             {/* Bubble da mensagem citada */}
                                             {msg.quotedMessage && (
-                                                <div className={cn(
-                                                    'mb-2 rounded-lg px-2 py-1.5 text-xs border-l-2',
-                                                    isOutbound
-                                                        ? 'bg-primary-foreground/10 border-primary-foreground/40 text-primary-foreground/80'
-                                                        : 'bg-background/60 border-muted-foreground/30 text-muted-foreground'
-                                                )}>
+                                                <div
+                                                    className={cn(
+                                                        'mb-2 rounded-lg px-2 py-1.5 text-xs border-l-2',
+                                                        isOutbound
+                                                            ? 'bg-primary-foreground/10 border-primary-foreground/40 text-primary-foreground/80'
+                                                            : 'bg-background/60 border-muted-foreground/30 text-muted-foreground',
+                                                        msg.quotedMessage.quotedExternalId ? 'cursor-pointer hover:opacity-75 transition-opacity' : ''
+                                                    )}
+                                                    onClick={() => msg.quotedMessage?.quotedExternalId && scrollToQuoted(msg.quotedMessage.quotedExternalId)}
+                                                >
                                                     <p className="truncate">{msg.quotedMessage.text || '[Mídia]'}</p>
                                                 </div>
                                             )}
@@ -3073,7 +3099,7 @@ function ConversationsPageInner() {
     const [allTeams, setAllTeams]     = useState<TeamRef[]>([])   // todos os times (context menu)
     const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
-    const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null; externalId?: string | null; quotedMessage?: { text: string } | null } | null>(null)
+    const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null; externalId?: string | null; quotedMessage?: { text: string; quotedExternalId?: string | null } | null } | null>(null)
     const [notifyNewMessage, setNotifyNewMessage] = useState(true)
     const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
     const [advancedFilterConditions, setAdvancedFilterConditions] = useState<FilterCondition[]>([])
