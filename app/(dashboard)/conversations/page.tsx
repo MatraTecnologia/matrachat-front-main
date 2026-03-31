@@ -47,6 +47,8 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { DateRange } from 'react-day-picker'
 import { TemplateAutocomplete } from '@/components/TemplateAutocomplete'
+import data from '@emoji-mart/data'
+import Picker from '@emoji-mart/react'
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -1632,8 +1634,9 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [allTags, setAllTags]         = useState<TagRef[]>([])
     const [tagMenuOpen, setTagMenuOpen] = useState(false)
 
-    // Estados para envio de mídia
+    // Estados para envio de mídia e emoji
     const [fileQueue, setFileQueue] = useState<QueuedFile[]>([])
+    const [emojiOpen, setEmojiOpen] = useState(false)
     const [mediaCaption, setMediaCaption] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -2082,6 +2085,23 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
 
     function removeFileFromQueue(id: string) {
         setFileQueue((prev) => prev.filter((f) => f.id !== id))
+    }
+
+    function handleEmojiSelect(emoji: { native: string }) {
+        const ta = textareaRef.current
+        if (!ta) { setReply((prev) => prev + emoji.native); return }
+        const start = ta.selectionStart
+        const end = ta.selectionEnd
+        const before = reply.slice(0, start)
+        const after = reply.slice(end)
+        const newValue = before + emoji.native + after
+        setReply(newValue)
+        requestAnimationFrame(() => {
+            const pos = start + emoji.native.length
+            ta.selectionStart = pos
+            ta.selectionEnd = pos
+            ta.focus()
+        })
     }
 
     async function handleMediaSend() {
@@ -3001,9 +3021,23 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                 }
                             }}
                         />
-                        <Button variant="ghost" size="icon" className="absolute right-2 bottom-2 h-6 w-6">
-                            <Smile className="h-4 w-4 text-muted-foreground" />
-                        </Button>
+                        <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                            <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon" className="absolute right-2 bottom-2 h-6 w-6">
+                                    <Smile className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent side="top" align="end" className="w-auto p-0 border-none shadow-lg">
+                                <Picker
+                                    data={data}
+                                    onEmojiSelect={(emoji: { native: string }) => { handleEmojiSelect(emoji); setEmojiOpen(false) }}
+                                    locale="pt"
+                                    previewPosition="none"
+                                    skinTonePosition="search"
+                                    theme="light"
+                                />
+                            </PopoverContent>
+                        </Popover>
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <Button
