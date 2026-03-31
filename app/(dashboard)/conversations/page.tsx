@@ -9,7 +9,7 @@ import {
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
     CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
-    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar as CalendarIcon, CalendarDays, Users, UsersRound, ArrowLeft, Square,
+    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar as CalendarIcon, CalendarDays, Users, UsersRound, ArrowLeft, Square, Reply,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -85,6 +85,8 @@ type LocalMessage = {
     status: 'sending' | 'sent' | 'error'
     createdAt: Date
     agent?: { id: string; name: string; image?: string | null } | null
+    externalId?: string | null
+    quotedMessage?: { text: string } | null
 }
 
 type ConvStatus = 'all' | 'open' | 'resolved' | 'pending'
@@ -1591,7 +1593,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     orgId: string
     members: MemberRef[]
     onContactUpdated: (updated: Partial<Contact> & { id: string }) => void
-    incomingMessage?: { id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null } | null
+    incomingMessage?: { id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null; externalId?: string | null; quotedMessage?: { text: string } | null } | null
     canSend?: boolean
     canAssignConversations?: boolean
     onBack?: () => void
@@ -1599,6 +1601,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [contactModalOpen, setContactModalOpen] = useState(false)
     const [reply, setReply]         = useState('')
     const [replyType, setReplyType] = useState<'reply' | 'note'>('reply')
+    const [replyingTo, setReplyingTo] = useState<LocalMessage | null>(null)
     const [messages, setMessages]   = useState<LocalMessage[]>([])
     const [loadingMsgs, setLoadingMsgs] = useState(false)
     const [loadingMore, setLoadingMore] = useState(false)
@@ -1699,7 +1702,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             .catch(() => null)
     }, [orgId])
 
-    function parseMessages(raw: Array<{ id: string; content: string; type: string; direction: string; status: string; createdAt: string; channelId?: string | null; user?: { id: string; name: string; image?: string | null } | null }>): LocalMessage[] {
+    function parseMessages(raw: Array<{ id: string; content: string; type: string; direction: string; status: string; createdAt: string; channelId?: string | null; externalId?: string | null; quotedMessage?: { text: string } | null; user?: { id: string; name: string; image?: string | null } | null }>): LocalMessage[] {
         const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'] as const
         return raw.map((m) => ({
             id: m.id,
@@ -1710,6 +1713,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             status: m.status as LocalMessage['status'],
             createdAt: new Date(m.createdAt),
             agent: m.user ?? null,
+            externalId: m.externalId ?? null,
+            quotedMessage: m.quotedMessage ?? null,
         }))
     }
 
@@ -1742,6 +1747,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         setSelectedChannel(contact.channel?.type === 'whatsapp' ? contact.channel : null)
         setContactTags((contact.tags ?? []).map((t) => t.tag))
         setReply('')
+        setReplyingTo(null)
         messageCountRef.current = 0
         if (recording) cancelRecording()
         setMsgDateFilter(undefined)
@@ -1879,6 +1885,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 status: 'sent' as const,
                 createdAt: new Date(incomingMessage.createdAt),
                 agent: isOutbound && incomingMessage.user ? incomingMessage.user : null,
+                externalId: incomingMessage.externalId ?? null,
+                quotedMessage: incomingMessage.quotedMessage ?? null,
             }]
         })
     }, [incomingMessage])
@@ -1979,6 +1987,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         channelId?: string
         status?: string
         externalId?: string
+        quotedExternalId?: string
+        quotedText?: string
     }) {
         try {
             await api.post('/messages', {
@@ -1989,6 +1999,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 content: params.content,
                 status: params.status ?? 'sent',
                 externalId: params.externalId,
+                quotedExternalId: params.quotedExternalId,
+                quotedText: params.quotedText,
             })
         } catch { /* falha silenciosa */ }
     }
@@ -2198,6 +2210,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             const msg: LocalMessage = { id: crypto.randomUUID(), text, type: 'note', status: 'sent', createdAt: new Date() }
             setMessages((prev) => [...prev, msg])
             setReply('')
+            setReplyingTo(null)
             saveMessage({ content: text, type: 'note', direction: 'outbound' })
             return
         }
@@ -2208,14 +2221,28 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         // Aplica assinatura ao texto antes de enviar
         const textWithSignature = applySignature(text)
 
+        // Extrai ID curto para replyid (formato owner:messageId → messageId)
+        const replyShortId = replyingTo?.externalId
+            ? (replyingTo.externalId.includes(':') ? replyingTo.externalId.split(':')[1] : replyingTo.externalId)
+            : undefined
+
         const tempId = crypto.randomUUID()
-        const optimistic: LocalMessage = { id: tempId, text: textWithSignature, type: 'reply', status: 'sending', createdAt: new Date(), agent: currentAgentId ? { id: currentAgentId, name: userName, image: currentAgentImage } : null }
+        const optimistic: LocalMessage = {
+            id: tempId, text: textWithSignature, type: 'reply', status: 'sending', createdAt: new Date(),
+            agent: currentAgentId ? { id: currentAgentId, name: userName, image: currentAgentImage } : null,
+            quotedMessage: replyingTo ? { text: replyingTo.text } : null,
+        }
         setMessages((prev) => [...prev, optimistic])
         setReply('')
+        setReplyingTo(null)
         setSending(true)
 
         try {
-            const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, { number: contactNumber, text: textWithSignature })
+            const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, {
+                number: contactNumber,
+                text: textWithSignature,
+                ...(replyShortId ? { replyid: replyShortId } : {}),
+            })
 
             const externalId = response.data?.data?.messageid || response.data?.data?.key?.id || null
 
@@ -2227,6 +2254,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 channelId: selectedChannel.id,
                 status: 'sent',
                 externalId: externalId,
+                quotedExternalId: replyingTo?.externalId ?? undefined,
+                quotedText: replyingTo?.text ?? undefined,
             })
 
             // Notifica supervisão sobre a ação
@@ -2621,13 +2650,23 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                         <div className="flex-1 h-px bg-border" />
                                     </div>
                                 )}
-                                <div className={cn('flex items-end gap-1.5', isOutbound ? 'justify-end' : 'justify-start')}>
+                                <div className={cn('flex items-end gap-1.5 group', isOutbound ? 'justify-end' : 'justify-start')}>
                                     {/* Avatar do contato (inbound) */}
                                     {!isOutbound && (
                                         <Avatar className="h-6 w-6 shrink-0">
                                             {contact.avatarUrl && <AvatarImage src={contact.avatarUrl} />}
                                             <AvatarFallback className="text-[10px] bg-muted">{initials(contact.name)}</AvatarFallback>
                                         </Avatar>
+                                    )}
+                                    {/* Botão reply — aparece no hover, antes do bubble para outbound */}
+                                    {isOutbound && msg.type !== 'note' && (
+                                        <button
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground shrink-0"
+                                            onClick={() => setReplyingTo(msg)}
+                                            title="Responder"
+                                        >
+                                            <Reply className="h-3.5 w-3.5" />
+                                        </button>
                                     )}
                                     <div className={cn('max-w-[70%]', isOutbound ? 'flex flex-col items-end' : 'flex flex-col items-start')}>
                                         {/* Nome do agente (outbound) */}
@@ -2642,6 +2681,17 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                                     ? 'bg-primary text-primary-foreground'
                                                     : 'bg-muted text-foreground'
                                         )}>
+                                            {/* Bubble da mensagem citada */}
+                                            {msg.quotedMessage && (
+                                                <div className={cn(
+                                                    'mb-2 rounded-lg px-2 py-1.5 text-xs border-l-2',
+                                                    isOutbound
+                                                        ? 'bg-primary-foreground/10 border-primary-foreground/40 text-primary-foreground/80'
+                                                        : 'bg-background/60 border-muted-foreground/30 text-muted-foreground'
+                                                )}>
+                                                    <p className="truncate">{msg.quotedMessage.text || '[Mídia]'}</p>
+                                                </div>
+                                            )}
                                             {msg.type === 'note' && (
                                                 <p className="text-[10px] font-semibold text-amber-600 mb-0.5">Nota interna</p>
                                             )}
@@ -2670,6 +2720,16 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                             </div>
                                         </div>
                                     </div>
+                                    {/* Botão reply — aparece no hover, depois do bubble para inbound */}
+                                    {!isOutbound && (
+                                        <button
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground shrink-0"
+                                            onClick={() => setReplyingTo(msg)}
+                                            title="Responder"
+                                        >
+                                            <Reply className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
                                     {/* Avatar do agente (outbound) */}
                                     {isOutbound && (
                                         <Avatar className="h-6 w-6 shrink-0">
@@ -2748,6 +2808,20 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                     )}
                 </div>
                 {canSend && (<>
+                {/* Barra "Respondendo a" */}
+                {replyingTo && replyType === 'reply' && (
+                    <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-primary bg-primary/5 px-3 py-2 text-xs">
+                        <div className="flex-1 min-w-0">
+                            <p className="font-medium text-primary text-[11px]">
+                                Respondendo a {replyingTo.type === 'inbound' ? contact.name : 'você'}
+                            </p>
+                            <p className="truncate text-muted-foreground">{replyingTo.text || '[Mídia]'}</p>
+                        </div>
+                        <button onClick={() => setReplyingTo(null)} className="shrink-0">
+                            <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                        </button>
+                    </div>
+                )}
                 {/* Preview de mídia */}
                 {mediaPreview && selectedFile && (
                     <div className="mb-2 p-3 border rounded-lg bg-muted/30 space-y-3">
@@ -2999,7 +3073,7 @@ function ConversationsPageInner() {
     const [allTeams, setAllTeams]     = useState<TeamRef[]>([])   // todos os times (context menu)
     const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
-    const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null } | null>(null)
+    const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null; externalId?: string | null; quotedMessage?: { text: string } | null } | null>(null)
     const [notifyNewMessage, setNotifyNewMessage] = useState(true)
     const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
     const [advancedFilterConditions, setAdvancedFilterConditions] = useState<FilterCondition[]>([])
@@ -3162,7 +3236,7 @@ function ConversationsPageInner() {
         if (message.direction === 'outbound' && message.user?.id === userId) return
         if (selectedRef.current?.id === contactId) {
             // Push message into the detail panel
-            setIncoming({ id: message.id, content: message.content, type: message.type, channelId: message.channelId, createdAt: message.createdAt, direction: message.direction, user: message.user })
+            setIncoming({ id: message.id, content: message.content, type: message.type, channelId: message.channelId, createdAt: message.createdAt, direction: message.direction, user: message.user, externalId: message.externalId ?? null, quotedMessage: message.quotedMessage ?? null })
         } else {
             // Marca como não lida apenas para mensagens inbound
             if (message.direction !== 'outbound') {
