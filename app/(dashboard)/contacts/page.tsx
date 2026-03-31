@@ -128,7 +128,10 @@ function ContactDialog({ open, onClose, onSaved, orgId, contact }: {
                 toast.success('Contato criado.')
             }
             onSaved(); onClose()
-        } catch { toast.error('Erro ao salvar contato.') }
+        } catch (err: any) {
+            const msg = err?.response?.data?.error ?? 'Erro ao salvar contato.'
+            toast.error(msg)
+        }
         finally { setLoading(false) }
     }
 
