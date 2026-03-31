@@ -89,6 +89,12 @@ type LocalMessage = {
     quotedMessage?: { text: string; quotedExternalId?: string | null } | null
 }
 
+type QueuedFile = {
+    id: string
+    file: File
+    preview: string
+}
+
 type ConvStatus = 'all' | 'open' | 'resolved' | 'pending'
 type ConvTab    = 'mine' | 'unassigned' | 'all' | 'nochannel'
 
@@ -1627,8 +1633,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     const [tagMenuOpen, setTagMenuOpen] = useState(false)
 
     // Estados para envio de mídia
-    const [selectedFile, setSelectedFile] = useState<File | null>(null)
-    const [mediaPreview, setMediaPreview] = useState<string | null>(null)
+    const [fileQueue, setFileQueue] = useState<QueuedFile[]>([])
     const [mediaCaption, setMediaCaption] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -2045,83 +2050,104 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     }
 
     async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0]
-        if (!file) return
+        const files = e.target.files
+        if (!files || files.length === 0) return
+
+        const remaining = 10 - fileQueue.length
+        const toProcess = Array.from(files).slice(0, remaining)
+        if (files.length > remaining) {
+            toast.error(`Limite de 10 arquivos. ${files.length - remaining} arquivo(s) ignorado(s).`)
+        }
 
         try {
-            const base64 = await fileToBase64(file)
-            setSelectedFile(file)
-            setMediaPreview(base64)
+            const items: QueuedFile[] = await Promise.all(
+                toProcess.map(async (file) => ({
+                    id: crypto.randomUUID(),
+                    file,
+                    preview: await fileToBase64(file),
+                }))
+            )
+            setFileQueue((prev) => [...prev, ...items])
         } catch {
-            toast.error('Erro ao processar arquivo')
+            toast.error('Erro ao processar arquivo(s)')
         }
+        if (fileInputRef.current) fileInputRef.current.value = ''
     }
 
     function cancelMediaPreview() {
-        setSelectedFile(null)
-        setMediaPreview(null)
+        setFileQueue([])
         setMediaCaption('')
         if (fileInputRef.current) fileInputRef.current.value = ''
     }
 
+    function removeFileFromQueue(id: string) {
+        setFileQueue((prev) => prev.filter((f) => f.id !== id))
+    }
+
     async function handleMediaSend() {
-        if (!selectedFile || !mediaPreview || sending) return
+        if (fileQueue.length === 0 || sending) return
         if (!selectedChannel) { alert('Selecione um canal WhatsApp para enviar a mídia.'); return }
         if (!contactNumber) { alert('Número do contato não encontrado.'); return }
 
-        const tempId = crypto.randomUUID()
-        const mediaType = detectMediaType(selectedFile)
+        const filesToSend = [...fileQueue]
         const captionToSend = mediaCaption.trim()
-        // Aplica assinatura ao caption se houver texto
         const captionWithSignature = captionToSend ? applySignature(captionToSend) : ''
-        const captionText = captionWithSignature || selectedFile.name
-        const optimistic: LocalMessage = {
-            id: tempId,
-            text: captionText,
-            type: 'reply',
-            mediaType,
-            mediaUrl: mediaPreview,
-            status: 'sending',
-            createdAt: new Date(),
-            agent: currentAgentId ? { id: currentAgentId, name: userName, image: currentAgentImage } : null,
-        }
 
-        setMessages((prev) => [...prev, optimistic])
+        const tempIds = filesToSend.map(() => crypto.randomUUID())
+        const optimisticMessages: LocalMessage[] = filesToSend.map((qf, i) => ({
+            id: tempIds[i],
+            text: i === 0 ? (captionWithSignature || qf.file.name) : qf.file.name,
+            type: 'reply' as const,
+            mediaType: detectMediaType(qf.file),
+            mediaUrl: qf.preview,
+            status: 'sending' as const,
+            createdAt: new Date(Date.now() + i),
+            agent: currentAgentId ? { id: currentAgentId, name: userName, image: currentAgentImage } : null,
+        }))
+
+        setMessages((prev) => [...prev, ...optimisticMessages])
         cancelMediaPreview()
         setSending(true)
 
-        try {
-            const base64Data = mediaPreview.split(',')[1]
-            const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, {
-                number: contactNumber,
-                mediaMessage: {
-                    mediatype: mediaType,
-                    fileName: selectedFile.name,
-                    media: base64Data,
-                    caption: captionWithSignature || undefined,
+        for (let i = 0; i < filesToSend.length; i++) {
+            const qf = filesToSend[i]
+            const tempId = tempIds[i]
+            const mediaType = detectMediaType(qf.file)
+            const caption = i === 0 ? (captionWithSignature || undefined) : undefined
+
+            try {
+                const base64Data = qf.preview.split(',')[1]
+                const response = await api.post(`/channels/${selectedChannel.id}/whatsapp/send`, {
+                    number: contactNumber,
+                    mediaMessage: {
+                        mediatype: mediaType,
+                        fileName: qf.file.name,
+                        media: base64Data,
+                        caption,
+                    }
+                })
+
+                const externalId = response.data?.data?.messageid || response.data?.data?.key?.id || null
+
+                setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
+                const saved = await saveMessage({
+                    content: (i === 0 ? captionWithSignature : '') || qf.file.name,
+                    type: mediaType,
+                    direction: 'outbound',
+                    channelId: selectedChannel.id,
+                    status: 'sent',
+                    externalId,
+                })
+                if (saved?.id) {
+                    setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: saved.id } : m))
                 }
-            })
-
-            const externalId = response.data?.data?.messageid || response.data?.data?.key?.id || null
-
-            setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
-            const saved = await saveMessage({
-                content: captionWithSignature || selectedFile.name,
-                type: mediaType,
-                direction: 'outbound',
-                channelId: selectedChannel.id,
-                status: 'sent',
-                externalId: externalId,
-            })
-            if (saved?.id) {
-                setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: saved.id } : m))
+            } catch {
+                setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
+                toast.error(`Erro ao enviar ${qf.file.name}`)
             }
-        } catch {
-            setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
-            toast.error('Erro ao enviar mídia')
-        } finally {
-            setSending(false)
         }
+
+        setSending(false)
     }
 
     async function startRecording() {
@@ -2858,43 +2884,20 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                         </button>
                     </div>
                 )}
-                {/* Preview de mídia */}
-                {mediaPreview && selectedFile && (
+                {/* Preview de mídia (fila de arquivos) */}
+                {fileQueue.length > 0 && (
                     <div className="mb-2 p-3 border rounded-lg bg-muted/30 space-y-3">
-                        <div className="flex items-start gap-3">
-                            {detectMediaType(selectedFile) === 'image' ? (
-                                <img src={mediaPreview} alt="Preview" className="h-20 w-20 object-cover rounded" />
-                            ) : (
-                                <div className="h-20 w-20 flex items-center justify-center bg-muted rounded border shrink-0">
-                                    <Paperclip className="h-8 w-8 text-muted-foreground" />
-                                </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{selectedFile.name}</p>
-                                <p className="text-xs text-muted-foreground mb-2">
-                                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                                </p>
-                                <Input
-                                    placeholder="Adicionar legenda (opcional)..."
-                                    value={mediaCaption}
-                                    onChange={(e) => setMediaCaption(e.target.value)}
-                                    disabled={sending}
-                                    className="text-sm"
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                            e.preventDefault()
-                                            handleMediaSend()
-                                        }
-                                    }}
-                                />
-                            </div>
-                            <div className="flex flex-col gap-2 shrink-0">
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-medium text-muted-foreground">
+                                {fileQueue.length} {fileQueue.length === 1 ? 'arquivo' : 'arquivos'}
+                            </p>
+                            <div className="flex items-center gap-2">
                                 <Button
                                     size="sm"
                                     disabled={sending}
                                     onClick={handleMediaSend}
                                 >
-                                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enviar'}
+                                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Enviar ${fileQueue.length > 1 ? `(${fileQueue.length})` : ''}`}
                                 </Button>
                                 <Button
                                     variant="ghost"
@@ -2906,11 +2909,56 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                 </Button>
                             </div>
                         </div>
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                            {fileQueue.map((qf) => (
+                                <div key={qf.id} className="relative shrink-0 w-20">
+                                    {detectMediaType(qf.file) === 'image' ? (
+                                        <img src={qf.preview} alt={qf.file.name} className="h-20 w-20 object-cover rounded border" />
+                                    ) : (
+                                        <div className="h-20 w-20 flex flex-col items-center justify-center bg-muted rounded border gap-1">
+                                            <Paperclip className="h-5 w-5 text-muted-foreground" />
+                                            <span className="text-[9px] text-muted-foreground text-center leading-tight px-1 truncate w-full">
+                                                {qf.file.name.split('.').pop()?.toUpperCase()}
+                                            </span>
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={() => removeFileFromQueue(qf.id)}
+                                        disabled={sending}
+                                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:bg-destructive/90"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                    <p className="text-[9px] text-muted-foreground truncate mt-0.5">{qf.file.name}</p>
+                                </div>
+                            ))}
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={sending || fileQueue.length >= 10}
+                                className="h-20 w-20 shrink-0 flex items-center justify-center border border-dashed rounded hover:bg-muted/50 disabled:opacity-50"
+                            >
+                                <Plus className="h-5 w-5 text-muted-foreground" />
+                            </button>
+                        </div>
+                        <Input
+                            placeholder="Adicionar legenda (opcional)..."
+                            value={mediaCaption}
+                            onChange={(e) => setMediaCaption(e.target.value)}
+                            disabled={sending}
+                            className="text-sm"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                    e.preventDefault()
+                                    handleMediaSend()
+                                }
+                            }}
+                        />
                     </div>
                 )}
                 <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"
                     className="hidden"
                     onChange={handleFileSelect}
@@ -2963,7 +3011,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => fileInputRef.current?.click()}
-                            disabled={sending || !!mediaPreview}
+                            disabled={sending}
                         >
                             <Paperclip className="h-4 w-4 text-muted-foreground" />
                         </Button>
