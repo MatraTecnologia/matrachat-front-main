@@ -2011,9 +2011,9 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
         externalId?: string
         quotedExternalId?: string
         quotedText?: string
-    }) {
+    }): Promise<{ id: string } | null> {
         try {
-            await api.post('/messages', {
+            const { data } = await api.post('/messages', {
                 contactId: contact.id,
                 channelId: params.channelId,
                 direction: params.direction,
@@ -2024,7 +2024,8 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 quotedExternalId: params.quotedExternalId,
                 quotedText: params.quotedText,
             })
-        } catch { /* falha silenciosa */ }
+            return data
+        } catch { return null }
     }
 
     function fileToBase64(file: File): Promise<string> {
@@ -2104,7 +2105,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             const externalId = response.data?.data?.messageid || response.data?.data?.key?.id || null
 
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
-            saveMessage({
+            const saved = await saveMessage({
                 content: captionWithSignature || selectedFile.name,
                 type: mediaType,
                 direction: 'outbound',
@@ -2112,6 +2113,9 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 status: 'sent',
                 externalId: externalId,
             })
+            if (saved?.id) {
+                setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: saved.id } : m))
+            }
         } catch {
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
             toast.error('Erro ao enviar mídia')
@@ -2208,7 +2212,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             })
             const externalId = response.data?.data?.messageid || response.data?.data?.key?.id || null
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
-            saveMessage({
+            const saved = await saveMessage({
                 content: '',
                 type: 'audio',
                 direction: 'outbound',
@@ -2216,6 +2220,9 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 status: 'sent',
                 externalId,
             })
+            if (saved?.id) {
+                setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: saved.id } : m))
+            }
         } catch {
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
             toast.error('Erro ao enviar áudio')
