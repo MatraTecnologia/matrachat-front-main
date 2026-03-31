@@ -1323,6 +1323,8 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
     const imageRef = useRef<HTMLImageElement>(null)
 
+    const [unavailable, setUnavailable] = useState(false)
+
     async function load() {
         if (state === 'loading' || state === 'loaded') return
         setState('loading')
@@ -1330,7 +1332,11 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
             const { data } = await api.get(`/channels/${channelId}/whatsapp/media/${messageId}`)
             setSrc(`data:${data.mimeType};base64,${data.base64}`)
             setState('loaded')
-        } catch {
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+            if (msg?.includes('ID externo')) {
+                setUnavailable(true)
+            }
             setState('error')
         }
     }
@@ -1423,18 +1429,24 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
                         <a href={src} download className="underline text-xs">{caption || label[mediaType]}</a>
                     )
                 ) : (
-                    <button
-                        onClick={load}
-                        disabled={state === 'loading'}
-                        className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-80 hover:opacity-100 disabled:opacity-50"
-                    >
-                        {state === 'loading' ? (
-                            <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-                        ) : (
-                            <span>⬇</span>
-                        )}
-                        {state === 'error' ? 'Erro — tentar novamente' : `Carregar ${label[mediaType]}`}
-                    </button>
+                    {unavailable ? (
+                        <span className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-50">
+                            {label[mediaType]} indisponivel
+                        </span>
+                    ) : (
+                        <button
+                            onClick={load}
+                            disabled={state === 'loading'}
+                            className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-80 hover:opacity-100 disabled:opacity-50"
+                        >
+                            {state === 'loading' ? (
+                                <span className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                            ) : (
+                                <span>⬇</span>
+                            )}
+                            {state === 'error' ? 'Erro — tentar novamente' : `Carregar ${label[mediaType]}`}
+                        </button>
+                    )}
                 )}
                 {caption && state === 'loaded' && mediaType !== 'document' && (
                     <p className="text-xs opacity-80 whitespace-pre-wrap break-words">{caption}</p>
