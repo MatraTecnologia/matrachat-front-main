@@ -8,6 +8,7 @@ import { Send } from 'lucide-react'
 import { useAgentSse, type SseNewMessage } from '@/hooks/useAgentSse'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useNotificationSound } from '../hooks/useNotificationSound'
 
 // ─── Mini reply form rendered inside the Sonner toast ────────────────────────
 
@@ -113,6 +114,7 @@ export function GlobalNotifications({ orgId, userId }: { orgId: string | null; u
 
     // Mapa de acumulação por contactId — persiste entre re-renders
     const accumRef = useRef<Map<string, AccumState>>(new Map())
+    const { play: playNotificationSound } = useNotificationSound()
 
     const handleNewMessage = useCallback((ev: SseNewMessage) => {
         // Conversations page manages its own notifications — avoid duplicates
@@ -122,7 +124,7 @@ export function GlobalNotifications({ orgId, userId }: { orgId: string | null; u
         // Need channelId + externalId to allow reply
         if (!ev.channelId || !ev.externalId || !orgId) return
         // Only notify if the conversation is assigned to the current user
-        if (ev.assignedToId !== userId) return
+        if (ev.assignedToId !== userId && ev.assignedToId !== null && ev.assignedToId !== undefined) return
 
         const contactName = ev.contactName ?? ev.contact?.name ?? 'Novo contato'
         const avatarUrl   = ev.contactAvatarUrl ?? ev.contact?.avatarUrl ?? null
@@ -219,7 +221,25 @@ export function GlobalNotifications({ orgId, userId }: { orgId: string | null; u
                 onAutoClose: clearAccum,
             }
         )
-    }, [pathname, orgId, userId])
+
+        // Sound
+        playNotificationSound()
+
+        // Browser notification
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            const notifBody = getPreviewText(ev.message.content, ev.message.type)
+            const notification = new Notification(contactName, {
+                body: notifBody,
+                icon: avatarUrl ?? '/icon-192.png',
+                tag: `msg-${ev.contactId}`,
+            })
+            notification.onclick = () => {
+                window.focus()
+                window.location.href = `/conversations?contactId=${ev.contactId}`
+                notification.close()
+            }
+        }
+    }, [pathname, orgId, userId, playNotificationSound])
 
     useAgentSse(orgId, { onNewMessage: handleNewMessage })
 

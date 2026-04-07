@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { useNotificationSound } from '../../../hooks/useNotificationSound'
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem,
     DropdownMenuSeparator, DropdownMenuTrigger,
@@ -3229,6 +3230,7 @@ function ConversationsPageInner() {
     const [unreadIds, setUnreadIds]       = useState<Map<string, number>>(new Map())
     const [incomingMessage, setIncoming]  = useState<{ id: string; content: string; type?: string; channelId?: string | null; createdAt: string; direction?: 'outbound' | 'inbound'; user?: { id: string; name: string; image?: string | null } | null; externalId?: string | null; quotedMessage?: { text: string; quotedExternalId?: string | null } | null } | null>(null)
     const [notifyNewMessage, setNotifyNewMessage] = useState(true)
+    const { play: playNotificationSound } = useNotificationSound()
     const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
     const [advancedFilterConditions, setAdvancedFilterConditions] = useState<FilterCondition[]>([])
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
@@ -3398,6 +3400,20 @@ function ConversationsPageInner() {
         if (selectedRef.current?.id === contactId) {
             // Push message into the detail panel
             setIncoming({ id: message.id, content: message.content, type: message.type, channelId: message.channelId, createdAt: message.createdAt, direction: message.direction, user: message.user, externalId: message.externalId ?? null, quotedMessage: message.quotedMessage ?? null })
+            if (message.direction === 'inbound' && notifyNewMessage && document.hidden) {
+                const isAssignedOrUnassigned = ev.assignedToId === userId || !ev.assignedToId
+                if (isAssignedOrUnassigned) {
+                    playNotificationSound()
+                    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                        const contactName = ev.contactName ?? ev.contact?.name ?? 'Novo contato'
+                        new Notification(contactName, {
+                            body: ev.message.content.slice(0, 100),
+                            icon: ev.contactAvatarUrl ?? '/icon-192.png',
+                            tag: `msg-${contactId}`,
+                        })
+                    }
+                }
+            }
         } else {
             // Marca como não lida apenas para mensagens inbound
             if (message.direction !== 'outbound') {
@@ -3406,6 +3422,26 @@ function ConversationsPageInner() {
                     next.set(contactId, (prev.get(contactId) ?? 0) + 1)
                     return next
                 })
+            }
+            // Browser notification + sound for inbound messages
+            if (message.direction === 'inbound' && notifyNewMessage) {
+                const isAssignedOrUnassigned = ev.assignedToId === userId || !ev.assignedToId
+                if (isAssignedOrUnassigned) {
+                    playNotificationSound()
+                    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                        const contactName = ev.contactName ?? ev.contact?.name ?? 'Novo contato'
+                        const body = ev.message.content.slice(0, 100)
+                        const notification = new Notification(contactName, {
+                            body,
+                            icon: ev.contactAvatarUrl ?? '/icon-192.png',
+                            tag: `msg-${contactId}`,
+                        })
+                        notification.onclick = () => {
+                            window.focus()
+                            notification.close()
+                        }
+                    }
+                }
             }
         }
         // Resolve canal pelo channelId usando o ref (sem depender de re-render)
@@ -3452,7 +3488,7 @@ function ConversationsPageInner() {
             if (idx === 0 && !channelChanged) return prev // já no topo e nada mudou
             return [updatedItem, ...updated]
         })
-    }, [userId])
+    }, [userId, playNotificationSound, notifyNewMessage])
 
     const handleConvUpdated = useCallback((ev: SseConvUpdated) => {
         const teamPatch = ev.teamId !== undefined
