@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { toast } from 'sonner'
@@ -111,6 +111,16 @@ function getPreviewText(content: string, type: string) {
 
 export function GlobalNotifications({ orgId, userId }: { orgId: string | null; userId: string | null }) {
     const pathname = usePathname()
+    const [notifyNewMessage, setNotifyNewMessage] = useState(true)
+
+    useEffect(() => {
+        if (!orgId || !userId) return
+        api.get('/users/me/notifications')
+            .then(({ data }) => {
+                setNotifyNewMessage(data.notifyNewMessage ?? true)
+            })
+            .catch(() => {})
+    }, [orgId, userId])
 
     // Mapa de acumulação por contactId — persiste entre re-renders
     const accumRef = useRef<Map<string, AccumState>>(new Map())
@@ -222,24 +232,24 @@ export function GlobalNotifications({ orgId, userId }: { orgId: string | null; u
             }
         )
 
-        // Sound
-        playNotificationSound()
+        if (notifyNewMessage) {
+            playNotificationSound()
 
-        // Browser notification
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            const notifBody = getPreviewText(ev.message.content, ev.message.type)
-            const notification = new Notification(contactName, {
-                body: notifBody,
-                icon: avatarUrl ?? '/icon-192.png',
-                tag: `msg-${ev.contactId}`,
-            })
-            notification.onclick = () => {
-                window.focus()
-                window.location.href = `/conversations?contactId=${ev.contactId}`
-                notification.close()
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                const notifBody = getPreviewText(ev.message.content, ev.message.type)
+                const notification = new Notification(contactName, {
+                    body: notifBody,
+                    icon: avatarUrl ?? '/icon-192.png',
+                    tag: `msg-${ev.contactId}`,
+                })
+                notification.onclick = () => {
+                    window.focus()
+                    window.location.href = `/conversations?contactId=${ev.contactId}`
+                    notification.close()
+                }
             }
         }
-    }, [pathname, orgId, userId, playNotificationSound])
+    }, [pathname, orgId, userId, playNotificationSound, notifyNewMessage])
 
     useAgentSse(orgId, { onNewMessage: handleNewMessage })
 
