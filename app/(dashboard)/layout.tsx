@@ -259,7 +259,6 @@ function SidebarContent({
     userName,
     userImage,
     userId,
-    unreadConversations,
 }: {
     expanded: boolean
     setExpanded: (v: boolean | ((v: boolean) => boolean)) => void
@@ -276,9 +275,9 @@ function SidebarContent({
     userName: string
     userImage: string
     userId: string | null
-    unreadConversations?: number
 }) {
     const { isConnected, onlineUsers } = usePresenceContext()
+    const { count: unreadConversations } = useUnreadBadge(orgId, userId)
 
     return (
         <aside
@@ -705,8 +704,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             .catch(() => null)
     }, [])
 
-    const { count: unreadConversations } = useUnreadBadge(orgId, userId)
-
     // Canais ativos e tags para o submenu de Conversas
     const [sidebarChannels, setSidebarChannels] = useState<Channel[]>([])
     const [sidebarTags, setSidebarTags] = useState<SidebarTag[]>([])
@@ -772,7 +769,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         userName={userName}
                         userImage={userImage}
                         userId={userId}
-                        unreadConversations={unreadConversations}
                     />
                 </div>
 
@@ -796,7 +792,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             userName={userName}
                             userImage={userImage}
                             userId={userId}
-                            unreadConversations={unreadConversations}
                         />
                     </SheetContent>
                 </Sheet>
