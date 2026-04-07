@@ -68,7 +68,14 @@ export type SseUserTyping = {
     isTyping: boolean
 }
 
-type AgentEvent = SseNewMessage | SseConvUpdated | SseUserViewing | SseUserLeft | SseUserTyping
+export type SseConvReadStatus = {
+    type: 'conv_read_status'
+    contactId: string
+    userId: string
+    isUnread: boolean
+}
+
+type AgentEvent = SseNewMessage | SseConvUpdated | SseUserViewing | SseUserLeft | SseUserTyping | SseConvReadStatus
 
 type Handlers = {
     onNewMessage?: (ev: SseNewMessage) => void
@@ -76,6 +83,7 @@ type Handlers = {
     onUserViewing?: (ev: SseUserViewing) => void
     onUserLeft?: (ev: SseUserLeft) => void
     onUserTyping?: (ev: SseUserTyping) => void
+    onConvReadStatus?: (ev: SseConvReadStatus) => void
 }
 
 // orgId mantido por compatibilidade de API mas não é mais necessário —
@@ -104,6 +112,9 @@ export function useAgentSse(_orgId: string | null, handlers: Handlers) {
                     break
                 case 'user_typing':
                     handlersRef.current.onUserTyping?.(event)
+                    break
+                case 'conv_read_status':
+                    handlersRef.current.onConvReadStatus?.(event)
                     break
             }
         }
