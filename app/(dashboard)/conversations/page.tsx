@@ -9,7 +9,7 @@ import {
     MoreVertical, SlidersHorizontal,
     Loader2, MessageCircle, Globe, Hash, ChevronDown, Plus, X,
     CheckCircle2, UserCircle2, UserPlus, Copy, Tags,
-    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar as CalendarIcon, CalendarDays, Users, UsersRound, ArrowLeft, Square, Reply,
+    ZoomIn, ZoomOut, RotateCcw, WifiOff, Filter, Calendar as CalendarIcon, CalendarDays, Users, UsersRound, ArrowLeft, Square, Reply, EyeOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -75,6 +75,9 @@ type Contact = {
     createdAt: string
     channel?: ChannelRef | null
     tags?: ContactTag[]
+    lastMessageAt?: string | null
+    isUnread?: boolean
+    unreadCount?: number
 }
 
 type LocalMessage = {
@@ -99,6 +102,21 @@ type QueuedFile = {
 
 type ConvStatus = 'all' | 'open' | 'resolved' | 'pending'
 type ConvTab    = 'mine' | 'unassigned' | 'all' | 'nochannel'
+
+const formatMessageTime = (dateStr: string) => {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffDays === 0) {
+        return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    }
+    if (diffDays < 7) {
+        return date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')
+    }
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+}
 
 // ─── Hook: orgId + currentUserId ───────────────────────────────────────────────
 
@@ -325,7 +343,7 @@ function ContactItem({
     active: boolean
     onClick: () => void
     unreadCount?: number
-    onContextAction: (action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'assign-team' | 'unassign-team' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email', contact: Contact, payload?: string) => void
+    onContextAction: (action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'assign-team' | 'unassign-team' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email' | 'mark-unread', contact: Contact, payload?: string) => void
     members: MemberRef[]
     tags: OrgTagRef[]
     teams: TeamRef[]
@@ -337,7 +355,8 @@ function ContactItem({
             onClick={onClick}
             className={cn(
                 'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60',
-                active && 'bg-primary/5 border-l-2 border-primary'
+                active && 'bg-primary/5 border-l-2 border-primary',
+                !active && hasUnread && 'bg-blue-50/50 dark:bg-blue-950/20'
             )}
         >
             <div className="relative shrink-0">
@@ -355,10 +374,18 @@ function ContactItem({
             </div>
             <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-1">
-                    <span className={cn('text-sm truncate', hasUnread ? 'font-semibold' : 'font-medium')}>
+                    <span className={cn('text-sm truncate', hasUnread ? 'font-bold' : 'font-medium')}>
                         {contact.name}
                     </span>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        {contact.lastMessageAt && (
+                            <span className={cn(
+                                'text-[10px] tabular-nums',
+                                hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'
+                            )}>
+                                {formatMessageTime(contact.lastMessageAt)}
+                            </span>
+                        )}
                         {/* Status badge */}
                         {contact.convStatus === 'resolved' && (
                             <span className="h-5 w-5 flex items-center justify-center rounded-full bg-green-100 border border-green-300" title="Resolvido">
@@ -438,6 +465,9 @@ function ContactItem({
                 <ContextMenuSeparator />
                 <ContextMenuItem className="gap-2 text-xs" onClick={onClick}>
                     <MessageSquare className="h-3.5 w-3.5" />Abrir conversa
+                </ContextMenuItem>
+                <ContextMenuItem className="gap-2 text-xs" onClick={() => onContextAction('mark-unread', contact)}>
+                    <EyeOff className="h-3.5 w-3.5" />Marcar como nao lida
                 </ContextMenuItem>
                 <ContextMenuSeparator />
 
@@ -592,7 +622,7 @@ function ConversationList({
     orgId, onContactUpdated, userRole, members,
     advancedFilterConditions, onOpenAdvancedFilters, loadMore, hasMore, loadingMore, canAssignConversations,
     teams, allTeams, activeTeamId, onTeamChange,
-    dateRange, onDateRangeChange,
+    dateRange, onDateRangeChange, onMarkUnread,
 }: {
     contacts: Contact[]
     noChannelContacts: Contact[]
@@ -628,6 +658,7 @@ function ConversationList({
     onTeamChange: (teamId: string | null) => void
     dateRange?: DateRange
     onDateRangeChange: (range: DateRange | undefined) => void
+    onMarkUnread?: (contact: Contact) => void
 }) {
     const [search, setSearch] = useState('')
     const [modalContact, setModalContact] = useState<Contact | null>(null)
@@ -745,9 +776,14 @@ function ConversationList({
         return () => clearTimeout(timer)
     }, [search, orgId])
 
-    async function handleContextAction(action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'assign-team' | 'unassign-team' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email', contact: Contact, payload?: string) {
+    async function handleContextAction(action: 'view' | 'resolve' | 'reopen' | 'assign' | 'unassign' | 'assign-team' | 'unassign-team' | 'add-tag' | 'remove-tag' | 'copy-phone' | 'copy-email' | 'mark-unread', contact: Contact, payload?: string) {
         if (action === 'view') {
             setModalContact(contact)
+            return
+        }
+
+        if (action === 'mark-unread') {
+            onMarkUnread?.(contact)
             return
         }
 
@@ -3221,6 +3257,13 @@ function ConversationsPageInner() {
             if (page === 1) {
                 setContacts(data.contacts)
                 totalFetchedRef.current = data.contacts.length
+                const initialUnread = new Map<string, number>()
+                for (const c of data.contacts) {
+                    if (c.isUnread && c.unreadCount > 0) {
+                        initialUnread.set(c.id, c.unreadCount)
+                    }
+                }
+                setUnreadIds(initialUnread)
             } else {
                 setContacts(prev => [...prev, ...data.contacts])
                 totalFetchedRef.current += data.contacts.length
@@ -3388,6 +3431,7 @@ function ConversationsPageInner() {
                         createdAt:  ev.contact.createdAt,
                         assignedToId: ev.assignedToId,
                         tags:       [],
+                        lastMessageAt: ev.lastMessageAt ?? ev.message.createdAt,
                     }
                     return [newContact, ...prev]
                 }
@@ -3399,9 +3443,12 @@ function ConversationsPageInner() {
             const channelChanged = incomingChannelId && incomingChannelId !== existing.channelId
             const updated = [...prev]
             const [item] = updated.splice(idx, 1)
-            const updatedItem: Contact = channelChanged
-                ? { ...item, channelId: incomingChannelId!, channel: resolveChannel(incomingChannelId) }
-                : item
+            const updatedItem: Contact = {
+                ...(channelChanged
+                    ? { ...item, channelId: incomingChannelId!, channel: resolveChannel(incomingChannelId) }
+                    : item),
+                lastMessageAt: ev.lastMessageAt ?? ev.message.createdAt,
+            }
             if (idx === 0 && !channelChanged) return prev // já no topo e nada mudou
             return [updatedItem, ...updated]
         })
@@ -3447,6 +3494,15 @@ function ConversationsPageInner() {
         setSelected((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev))
     }, [])
 
+    const handleMarkUnread = useCallback((contact: Contact) => {
+        setUnreadIds((prev) => {
+            const next = new Map(prev)
+            next.set(contact.id, Math.max(prev.get(contact.id) ?? 0, 1))
+            return next
+        })
+        api.post(`/contacts/${contact.id}/unread`).catch(() => {})
+    }, [])
+
     function handleSelectContact(c: Contact) {
         // Verifica se o canal está desconectado
         const channel = waChannels.find((ch) => ch.id === c.channelId)
@@ -3469,6 +3525,7 @@ function ConversationsPageInner() {
             next.delete(c.id)
             return next
         })
+        api.post(`/contacts/${c.id}/read`).catch(() => {})
         const params = new URLSearchParams(searchParams.toString())
         params.set('contactId', c.id)
         router.replace(`/conversations?${params.toString()}`)
@@ -3533,6 +3590,7 @@ function ConversationsPageInner() {
             next.delete(c.id)
             return next
         })
+        api.post(`/contacts/${c.id}/read`).catch(() => {})
         const params = new URLSearchParams(searchParams.toString())
         params.set('contactId', c.id)
         router.replace(`/conversations?${params.toString()}`)
@@ -3583,6 +3641,7 @@ function ConversationsPageInner() {
                         onTeamChange={setActiveTeamId}
                         dateRange={dateRange}
                         onDateRangeChange={setDateRange}
+                        onMarkUnread={handleMarkUnread}
                     />
                 </div>
 

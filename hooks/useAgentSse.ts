@@ -9,6 +9,7 @@ export type SseNewMessage = {
     externalId?: string | null
     contactName?: string | null
     contactAvatarUrl?: string | null
+    lastMessageAt?: string | null
     message: {
         id: string
         direction: 'outbound' | 'inbound'
