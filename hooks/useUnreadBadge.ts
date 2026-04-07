@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAgentSse, type SseNewMessage, type SseConvReadStatus } from './useAgentSse'
-import api from '../lib/api'
+import { api } from '../lib/api'
 
 export const useUnreadBadge = (orgId: string | null, userId: string | null) => {
     const [count, setCount] = useState(0)

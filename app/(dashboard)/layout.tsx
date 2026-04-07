@@ -41,6 +41,7 @@ import { PermissionsContext, type OrgPermissions } from '@/contexts/permissions-
 import { PresenceProvider, usePresenceContext } from '@/contexts/presence-context'
 import { OnlineUsersPanel } from '@/components/OnlineUsersPanel'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { useUnreadBadge } from '../../hooks/useUnreadBadge'
 // import { GlobalEventCapture } from '@/components/GlobalEventCapture' // TODO: Reativar quando implementar supervisão
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
@@ -133,6 +134,7 @@ function NavItemCollapsible({
     label,
     active,
     expanded,
+    badge,
     children,
 }: {
     href: string
@@ -140,6 +142,7 @@ function NavItemCollapsible({
     label: string
     active: boolean
     expanded: boolean
+    badge?: number
     children: React.ReactNode
 }) {
     const [open, setOpen] = useState(true)
@@ -151,13 +154,18 @@ function NavItemCollapsible({
                     <Link
                         href={href}
                         className={cn(
-                            'flex w-10 items-center justify-center rounded-lg py-2 transition-colors',
+                            'relative flex w-10 items-center justify-center rounded-lg py-2 transition-colors',
                             active
                                 ? 'bg-primary text-primary-foreground'
                                 : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         )}
                     >
                         <Icon className="h-5 w-5 shrink-0" />
+                        {badge !== undefined && badge > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[8px] font-bold text-white">
+                                {badge > 99 ? '99+' : badge}
+                            </span>
+                        )}
                     </Link>
                 </TooltipTrigger>
                 <TooltipContent side="right">{label}</TooltipContent>
@@ -180,6 +188,11 @@ function NavItemCollapsible({
                 >
                     <Icon className="h-5 w-5 shrink-0" />
                     <span className="flex-1 truncate text-sm font-medium">{label}</span>
+                    {badge !== undefined && badge > 0 && (
+                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-bold text-white">
+                            {badge > 99 ? '99+' : badge}
+                        </span>
+                    )}
                 </Link>
                 {/* Chevron — apenas abre/fecha o submenu */}
                 <CollapsibleTrigger asChild>
@@ -246,6 +259,7 @@ function SidebarContent({
     userName,
     userImage,
     userId,
+    unreadConversations,
 }: {
     expanded: boolean
     setExpanded: (v: boolean | ((v: boolean) => boolean)) => void
@@ -262,6 +276,7 @@ function SidebarContent({
     userName: string
     userImage: string
     userId: string | null
+    unreadConversations?: number
 }) {
     const { isConnected, onlineUsers } = usePresenceContext()
 
@@ -363,6 +378,7 @@ function SidebarContent({
                     label="Conversas"
                     active={pathname.startsWith('/conversations')}
                     expanded={expanded}
+                    badge={unreadConversations}
                 >
                     {/* Todos os canais — limpa o filtro de canal */}
                     <Link
@@ -635,6 +651,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Fecha sidebar mobile ao navegar
     useEffect(() => { setMobileOpen(false) }, [pathname])
 
+    // Solicita permissão de notificação
+    useEffect(() => {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+            Notification.requestPermission()
+        }
+    }, [])
+
     // Organização
     const [orgId, setOrgId] = useState<string | null>(null)
     const [orgName, setOrgName] = useState('')
@@ -681,6 +704,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             })
             .catch(() => null)
     }, [])
+
+    const { count: unreadConversations } = useUnreadBadge(orgId, userId)
 
     // Canais ativos e tags para o submenu de Conversas
     const [sidebarChannels, setSidebarChannels] = useState<Channel[]>([])
@@ -747,6 +772,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         userName={userName}
                         userImage={userImage}
                         userId={userId}
+                        unreadConversations={unreadConversations}
                     />
                 </div>
 
@@ -770,6 +796,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             userName={userName}
                             userImage={userImage}
                             userId={userId}
+                            unreadConversations={unreadConversations}
                         />
                     </SheetContent>
                 </Sheet>
