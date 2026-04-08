@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/contexts/permissions-context'
 import { NoPermission } from '@/components/no-permission'
@@ -367,6 +368,38 @@ const calcWaitingInfo = (contact: Contact, direction: 'inbound' | 'outbound'): W
     if (minutes < 30) return null
     const level: keyof typeof waitingBorderClass = minutes < 120 ? 'yellow' : minutes < 480 ? 'orange' : 'red'
     return { level, time: formatWaitingTime(ms) }
+}
+
+// ─── ConversationListSkeleton ─────────────────────────────────────────────────
+
+const SKELETON_WIDTHS = [
+    { name: 'w-28', sub: 'w-32' },
+    { name: 'w-36', sub: 'w-24' },
+    { name: 'w-24', sub: 'w-40' },
+    { name: 'w-32', sub: 'w-20' },
+    { name: 'w-40', sub: 'w-28' },
+    { name: 'w-20', sub: 'w-36' },
+    { name: 'w-32', sub: 'w-24' },
+    { name: 'w-28', sub: 'w-32' },
+]
+
+function ConversationListSkeleton() {
+    return (
+        <div className="flex flex-col">
+            {SKELETON_WIDTHS.map((w, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-b border-border/40 last:border-0">
+                    <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                            <Skeleton className={`h-3 rounded ${w.name}`} />
+                            <Skeleton className="h-2.5 w-8 rounded shrink-0" />
+                        </div>
+                        <Skeleton className={`h-2.5 rounded ${w.sub}`} />
+                    </div>
+                </div>
+            ))}
+        </div>
+    )
 }
 
 // ─── ContactItem ──────────────────────────────────────────────────────────────
@@ -1322,11 +1355,7 @@ function ConversationList({
 
             {/* Lista virtualizada */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto">
-                {(sourceLoading || searchLoading) && (
-                    <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                )}
+                {(sourceLoading || searchLoading) && <ConversationListSkeleton />}
                 {!sourceLoading && !searchLoading && filtered.length === 0 && (
                     <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
                         <MessageSquare className="h-8 w-8 text-muted-foreground/50" />
