@@ -342,15 +342,31 @@ const waitingBorderClass = {
     red:    'border-l-2 border-red-500',
 } as const
 
-const getLeadWaitingLevel = (contact: Contact): keyof typeof waitingBorderClass | null => {
+const waitingPillClass = {
+    yellow: 'bg-yellow-100 text-yellow-700 border-yellow-300',
+    orange: 'bg-orange-100 text-orange-700 border-orange-300',
+    red:    'bg-red-100 text-red-600 border-red-300',
+} as const
+
+type WaitingInfo = { level: keyof typeof waitingBorderClass; time: string }
+
+const formatWaitingTime = (ms: number): string => {
+    const minutes = Math.floor(ms / 60000)
+    if (minutes < 60) return `${minutes}min`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h`
+    return `${Math.floor(hours / 24)}d`
+}
+
+const calcWaitingInfo = (contact: Contact, direction: 'inbound' | 'outbound'): WaitingInfo | null => {
     if (!contact.assignedToId) return null
-    if (contact.lastMessageDirection !== 'outbound') return null
+    if (contact.lastMessageDirection !== direction) return null
     if (!contact.lastMessageAt) return null
-    const minutes = (Date.now() - new Date(contact.lastMessageAt).getTime()) / 60000
+    const ms = Date.now() - new Date(contact.lastMessageAt).getTime()
+    const minutes = ms / 60000
     if (minutes < 30) return null
-    if (minutes < 120) return 'yellow'
-    if (minutes < 480) return 'orange'
-    return 'red'
+    const level: keyof typeof waitingBorderClass = minutes < 120 ? 'yellow' : minutes < 480 ? 'orange' : 'red'
+    return { level, time: formatWaitingTime(ms) }
 }
 
 // ─── ContactItem ──────────────────────────────────────────────────────────────
@@ -369,11 +385,13 @@ function ContactItem({
     canAssignConversations?: boolean
 }) {
     const hasUnread = (unreadCount ?? 0) > 0
-    const waitingLevel = active ? null : getLeadWaitingLevel(contact)
-    const leftBorder = active ? null : waitingLevel ? waitingBorderClass[waitingLevel] : 'border-l-2 border-transparent'
+    const waitingInfo = active ? null : calcWaitingInfo(contact, 'outbound')
+    const responseInfo = active ? null : calcWaitingInfo(contact, 'inbound')
+    const leftBorder = active ? null : waitingInfo ? waitingBorderClass[waitingInfo.level] : 'border-l-2 border-transparent'
     const inner = (
         <button
             onClick={onClick}
+            title={waitingInfo ? `Lead sem resposta há ${waitingInfo.time}` : undefined}
             className={cn(
                 'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60',
                 active && 'bg-primary/5 border-l-2 border-primary',
@@ -400,6 +418,18 @@ function ContactItem({
                         {contact.name}
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
+                        {responseInfo && (
+                            <span
+                                className={cn(
+                                    'inline-flex items-center gap-0.5 text-[10px] font-semibold rounded-full px-1.5 py-0.5 border shrink-0',
+                                    waitingPillClass[responseInfo.level]
+                                )}
+                                title={`Lead aguardando sua resposta há ${responseInfo.time}`}
+                            >
+                                <Clock className="h-2.5 w-2.5" />
+                                {responseInfo.time}
+                            </span>
+                        )}
                         {contact.lastMessageAt && (
                             <span className={cn(
                                 'text-[10px] tabular-nums',
