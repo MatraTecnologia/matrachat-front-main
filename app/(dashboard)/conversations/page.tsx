@@ -77,6 +77,7 @@ type Contact = {
     channel?: ChannelRef | null
     tags?: ContactTag[]
     lastMessageAt?: string | null
+    lastMessageDirection?: string | null
     isUnread?: boolean
     unreadCount?: number
 }
@@ -335,6 +336,23 @@ function ConversationPreview({
     )
 }
 
+const waitingBorderClass = {
+    yellow: 'border-l-2 border-yellow-400',
+    orange: 'border-l-2 border-orange-400',
+    red:    'border-l-2 border-red-500',
+} as const
+
+const getLeadWaitingLevel = (contact: Contact): keyof typeof waitingBorderClass | null => {
+    if (!contact.assignedToId) return null
+    if (contact.lastMessageDirection !== 'outbound') return null
+    if (!contact.lastMessageAt) return null
+    const minutes = (Date.now() - new Date(contact.lastMessageAt).getTime()) / 60000
+    if (minutes < 30) return null
+    if (minutes < 120) return 'yellow'
+    if (minutes < 480) return 'orange'
+    return 'red'
+}
+
 // ─── ContactItem ──────────────────────────────────────────────────────────────
 
 function ContactItem({
@@ -351,13 +369,16 @@ function ContactItem({
     canAssignConversations?: boolean
 }) {
     const hasUnread = (unreadCount ?? 0) > 0
+    const waitingLevel = active ? null : getLeadWaitingLevel(contact)
+    const leftBorder = active ? null : waitingLevel ? waitingBorderClass[waitingLevel] : 'border-l-2 border-transparent'
     const inner = (
         <button
             onClick={onClick}
             className={cn(
                 'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60',
                 active && 'bg-primary/5 border-l-2 border-primary',
-                !active && hasUnread && 'bg-blue-50/50 dark:bg-blue-950/20'
+                !active && hasUnread && 'bg-blue-50/50 dark:bg-blue-950/20',
+                leftBorder
             )}
         >
             <div className="relative shrink-0">
