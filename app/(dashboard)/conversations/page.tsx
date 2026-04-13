@@ -1495,15 +1495,18 @@ function WhatsAppFormattedText({ text }: { text: string }) {
 
 // ─── MediaBubble ──────────────────────────────────────────────────────────────
 
-function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
+function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, available = true }: {
     messageId: string
     channelId: string
     mediaType: 'image' | 'audio' | 'video' | 'document' | 'sticker'
     caption?: string
     mediaUrl?: string
+    available?: boolean
 }) {
+    const mediaApiUrl = `${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}/whatsapp/media/${messageId}`
+
     const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>(mediaUrl ? 'loaded' : 'idle')
-    const [src, setSrc] = useState<string | null>(mediaUrl || null)
+    const [activeSrc, setActiveSrc] = useState<string | null>(mediaUrl || null)
     const [expandedImage, setExpandedImage] = useState(false)
     const [zoom, setZoom] = useState(1)
     const [position, setPosition] = useState({ x: 0, y: 0 })
@@ -1511,22 +1514,10 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
     const imageRef = useRef<HTMLImageElement>(null)
 
-    const [unavailable, setUnavailable] = useState(false)
-
-    async function load() {
+    const load = () => {
         if (state === 'loading' || state === 'loaded') return
-        setState('loading')
-        try {
-            const { data } = await api.get(`/channels/${channelId}/whatsapp/media/${messageId}`)
-            setSrc(`data:${data.mimeType};base64,${data.base64}`)
-            setState('loaded')
-        } catch (err: unknown) {
-            const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-            if (msg?.includes('ID externo')) {
-                setUnavailable(true)
-            }
-            setState('error')
-        }
+        setActiveSrc(mediaApiUrl)
+        setState(mediaType === 'document' ? 'loaded' : 'loading')
     }
 
     function handleZoomIn() {
@@ -1587,36 +1578,61 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
         sticker:  'Sticker',
     }
 
+    const showMedia = (state === 'loading' || state === 'loaded') && activeSrc
+
     return (
         <>
             <div className="flex flex-col gap-1">
-                {state === 'loaded' && src ? (
-                    mediaType === 'audio' ? (
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        <audio controls src={src} className="w-48" />
-                    ) : mediaType === 'image' || mediaType === 'sticker' ? (
-                        <button
-                            onClick={() => setExpandedImage(true)}
-                            className="group relative"
-                        >
-                            <img
-                                src={src}
-                                alt={caption || mediaType}
-                                className="max-w-[200px] rounded-lg dark-mode-image-subtle cursor-pointer hover:opacity-90 transition-opacity"
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
-                                <div className="bg-white/90 rounded-full p-2">
-                                    <Search className="h-4 w-4 text-gray-700" />
-                                </div>
+                {showMedia ? (
+                    <div className="relative">
+                        {state === 'loading' && (
+                            <div className="absolute inset-0 flex items-center justify-center z-10">
+                                <span className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                             </div>
-                        </button>
-                    ) : mediaType === 'video' ? (
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        <video controls src={src} className="max-w-[200px] rounded-lg" />
-                    ) : (
-                        <a href={src} download className="underline text-xs">{caption || label[mediaType]}</a>
-                    )
-                ) : unavailable ? (
+                        )}
+                        {mediaType === 'audio' ? (
+                            // eslint-disable-next-line jsx-a11y/media-has-caption
+                            <audio
+                                controls
+                                src={activeSrc}
+                                className="w-48"
+                                onCanPlay={() => setState('loaded')}
+                                onError={() => { setActiveSrc(null); setState('error') }}
+                            />
+                        ) : mediaType === 'image' || mediaType === 'sticker' ? (
+                            <button
+                                onClick={() => state === 'loaded' && setExpandedImage(true)}
+                                className="group relative"
+                            >
+                                <img
+                                    src={activeSrc}
+                                    alt={caption || mediaType}
+                                    className="max-w-[200px] rounded-lg dark-mode-image-subtle cursor-pointer hover:opacity-90 transition-opacity"
+                                    onLoad={() => setState('loaded')}
+                                    onError={() => { setActiveSrc(null); setState('error') }}
+                                />
+                                {state === 'loaded' && (
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-lg">
+                                        <div className="bg-white/90 rounded-full p-2">
+                                            <Search className="h-4 w-4 text-gray-700" />
+                                        </div>
+                                    </div>
+                                )}
+                            </button>
+                        ) : mediaType === 'video' ? (
+                            // eslint-disable-next-line jsx-a11y/media-has-caption
+                            <video
+                                controls
+                                src={activeSrc}
+                                className="max-w-[200px] rounded-lg"
+                                onCanPlay={() => setState('loaded')}
+                                onError={() => { setActiveSrc(null); setState('error') }}
+                            />
+                        ) : (
+                            <a href={activeSrc} download className="underline text-xs">{caption || label[mediaType]}</a>
+                        )}
+                    </div>
+                ) : !available ? (
                     <span className="flex items-center gap-1.5 rounded-lg border border-current/20 px-3 py-1.5 text-xs opacity-50">
                         {label[mediaType]} indisponivel
                     </span>
@@ -1639,7 +1655,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
                 )}
             </div>
 
-            {/* Modal de visualização expandida */}
+            {/* Modal de visualizacao expandida */}
             <Dialog open={expandedImage} onOpenChange={setExpandedImage}>
                 <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 overflow-hidden">
                     <div
@@ -1652,7 +1668,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl }: {
                     >
                         <img
                             ref={imageRef}
-                            src={src || ''}
+                            src={activeSrc || ''}
                             alt={caption || mediaType}
                             className="max-w-full max-h-[85vh] object-contain transition-transform"
                             style={{
@@ -2901,6 +2917,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                                     mediaType={msg.mediaType}
                                                     caption={msg.text}
                                                     mediaUrl={msg.mediaUrl}
+                                                    available={!!msg.externalId || !!msg.mediaUrl}
                                                 />
                                             )}
                                             {!msg.mediaType && <WhatsAppFormattedText text={msg.text} />}
