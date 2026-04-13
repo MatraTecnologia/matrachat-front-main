@@ -1522,7 +1522,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, avail
                 { credentials: 'include' },
             )
             if (!res.ok) {
-                if (res.status === 502) setUnavailable(true)
+                if (res.status === 422) setUnavailable(true)
                 setState('error')
                 return
             }
