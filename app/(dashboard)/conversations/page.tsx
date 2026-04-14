@@ -48,6 +48,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { AudioPlayer } from './components/audio-player'
+import { VideoPlayer } from './components/video-player'
 import type { DateRange } from 'react-day-picker'
 import { TemplateAutocomplete } from '@/components/TemplateAutocomplete'
 import data from '@emoji-mart/data'
@@ -1617,8 +1618,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, avail
                             </div>
                         </button>
                     ) : mediaType === 'video' ? (
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        <video controls src={activeSrc} className="max-w-[200px] rounded-lg" />
+                        <VideoPlayer src={activeSrc} caption={caption} />
                     ) : (
                         <a href={activeSrc} download className="underline text-xs">{caption || label[mediaType]}</a>
                     )
