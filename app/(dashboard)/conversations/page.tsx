@@ -47,6 +47,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { AudioPlayer } from './components/audio-player'
 import type { DateRange } from 'react-day-picker'
 import { TemplateAutocomplete } from '@/components/TemplateAutocomplete'
 import data from '@emoji-mart/data'
@@ -1495,13 +1496,14 @@ function WhatsAppFormattedText({ text }: { text: string }) {
 
 // ─── MediaBubble ──────────────────────────────────────────────────────────────
 
-function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, available = true }: {
+function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, available = true, isOutbound = false }: {
     messageId: string
     channelId: string
     mediaType: 'image' | 'audio' | 'video' | 'document' | 'sticker'
     caption?: string
     mediaUrl?: string
     available?: boolean
+    isOutbound?: boolean
 }) {
     const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>(mediaUrl ? 'loaded' : 'idle')
     const [activeSrc, setActiveSrc] = useState<string | null>(mediaUrl || null)
@@ -1597,8 +1599,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, avail
             <div className="flex flex-col gap-1">
                 {state === 'loaded' && activeSrc ? (
                     mediaType === 'audio' ? (
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        <audio controls src={activeSrc} className="w-48" />
+                        <AudioPlayer src={activeSrc} isOutbound={isOutbound} />
                     ) : mediaType === 'image' || mediaType === 'sticker' ? (
                         <button
                             onClick={() => setExpandedImage(true)}
@@ -2266,6 +2267,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                         fileName: qf.file.name,
                         media: base64Data,
                         caption,
+                        mimetype: qf.file.type,
                     }
                 })
 
@@ -2355,6 +2357,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             reader.readAsDataURL(blob)
         })
         const base64Data = base64Full.split(',')[1]
+        const blobUrl = URL.createObjectURL(blob)
 
         const tempId = crypto.randomUUID()
         const optimistic: LocalMessage = {
@@ -2362,6 +2365,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             text: '',
             type: 'reply',
             mediaType: 'audio',
+            mediaUrl: blobUrl,
             status: 'sending',
             createdAt: new Date(),
             agent: currentAgentId ? { id: currentAgentId, name: userName, image: currentAgentImage } : null,
@@ -2374,12 +2378,13 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 number: contactNumber,
                 mediaMessage: {
                     mediatype: 'ptt',
-                    fileName: 'audio.webm',
+                    fileName: 'audio.ogg',
                     media: base64Data,
+                    mimetype: recorder.mimeType,
                 },
             })
             const externalId = response.data?.data?.messageid || response.data?.data?.key?.id || null
-            setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent' } : m))
+            setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'sent', externalId } : m))
             const saved = await saveMessage({
                 content: '',
                 type: 'audio',
@@ -2389,7 +2394,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 externalId,
             })
             if (saved?.id) {
-                setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: saved.id } : m))
+                setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: saved.id, externalId } : m))
             }
         } catch {
             setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'error' } : m))
@@ -2907,6 +2912,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                                     caption={msg.text}
                                                     mediaUrl={msg.mediaUrl}
                                                     available={!!msg.externalId || !!msg.mediaUrl}
+                                                    isOutbound={isOutbound}
                                                 />
                                             )}
                                             {!msg.mediaType && <WhatsAppFormattedText text={msg.text} />}
