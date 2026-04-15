@@ -2297,10 +2297,16 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
     async function startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                ? 'audio/webm;codecs=opus'
-                : 'audio/webm'
-            const recorder = new MediaRecorder(stream, { mimeType })
+            const mimeType = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/mp4;codecs=opus',
+                'audio/mp4',
+                'audio/ogg;codecs=opus',
+            ].find((m) => MediaRecorder.isTypeSupported(m))
+            const recorder = mimeType
+                ? new MediaRecorder(stream, { mimeType })
+                : new MediaRecorder(stream)
             audioChunksRef.current = []
             recorder.ondataavailable = (e) => {
                 if (e.data.size > 0) audioChunksRef.current.push(e.data)
@@ -2378,7 +2384,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                 number: contactNumber,
                 mediaMessage: {
                     mediatype: 'ptt',
-                    fileName: 'audio.ogg',
+                    fileName: recorder.mimeType.includes('mp4') ? 'audio.mp4' : 'audio.ogg',
                     media: base64Data,
                     mimetype: recorder.mimeType,
                 },
