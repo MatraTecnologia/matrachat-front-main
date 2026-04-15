@@ -90,8 +90,9 @@ type LocalMessage = {
     text: string
     type: 'reply' | 'note' | 'inbound'
     mediaType?: 'image' | 'audio' | 'video' | 'document' | 'sticker'
-    mediaUrl?: string    // URL ou base64 da mídia
-    channelId?: string   // canal de origem (para buscar mídia)
+    mediaUrl?: string
+    mediaDuration?: number
+    channelId?: string
     status: 'sending' | 'sent' | 'error'
     createdAt: Date
     agent?: { id: string; name: string; image?: string | null } | null
@@ -1497,7 +1498,7 @@ function WhatsAppFormattedText({ text }: { text: string }) {
 
 // ─── MediaBubble ──────────────────────────────────────────────────────────────
 
-function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, available = true, isOutbound = false }: {
+function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, available = true, isOutbound = false, mediaDuration }: {
     messageId: string
     channelId: string
     mediaType: 'image' | 'audio' | 'video' | 'document' | 'sticker'
@@ -1505,6 +1506,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, avail
     mediaUrl?: string
     available?: boolean
     isOutbound?: boolean
+    mediaDuration?: number
 }) {
     const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>(mediaUrl ? 'loaded' : 'idle')
     const [activeSrc, setActiveSrc] = useState<string | null>(mediaUrl || null)
@@ -1600,7 +1602,7 @@ function MediaBubble({ messageId, channelId, mediaType, caption, mediaUrl, avail
             <div className="flex flex-col gap-1">
                 {state === 'loaded' && activeSrc ? (
                     mediaType === 'audio' ? (
-                        <AudioPlayer src={activeSrc} isOutbound={isOutbound} />
+                        <AudioPlayer src={activeSrc} isOutbound={isOutbound} fallbackDuration={mediaDuration} />
                     ) : mediaType === 'image' || mediaType === 'sticker' ? (
                         <button
                             onClick={() => setExpandedImage(true)}
@@ -2372,6 +2374,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
             type: 'reply',
             mediaType: 'audio',
             mediaUrl: blobUrl,
+            mediaDuration: recordingTime,
             status: 'sending',
             createdAt: new Date(),
             agent: currentAgentId ? { id: currentAgentId, name: userName, image: currentAgentImage } : null,
@@ -2919,6 +2922,7 @@ function ConversationDetail({ contact, waChannels, orgId, members, onContactUpda
                                                     mediaUrl={msg.mediaUrl}
                                                     available={!!msg.externalId || !!msg.mediaUrl}
                                                     isOutbound={isOutbound}
+                                                    mediaDuration={msg.mediaDuration}
                                                 />
                                             )}
                                             {!msg.mediaType && <WhatsAppFormattedText text={msg.text} />}

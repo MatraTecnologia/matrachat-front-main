@@ -34,9 +34,10 @@ const formatTime = (seconds: number) => {
 
 const SPEEDS = [1, 1.5, 2] as const
 
-export const AudioPlayer = ({ src, isOutbound = false }: {
+export const AudioPlayer = ({ src, isOutbound = false, fallbackDuration }: {
     src: string
     isOutbound?: boolean
+    fallbackDuration?: number
 }) => {
     const audioRef = useRef<HTMLAudioElement>(null)
     const waveformRef = useRef<HTMLDivElement>(null)
@@ -46,7 +47,8 @@ export const AudioPlayer = ({ src, isOutbound = false }: {
     const [speedIdx, setSpeedIdx] = useState(0)
 
     const bars = useMemo(() => generateBars(hashCode(src)), [src])
-    const progress = duration > 0 ? currentTime / duration : 0
+    const displayDuration = (duration > 0 && isFinite(duration)) ? duration : (fallbackDuration ?? 0)
+    const progress = displayDuration > 0 ? currentTime / displayDuration : 0
 
     useEffect(() => {
         const audio = audioRef.current
@@ -83,12 +85,12 @@ export const AudioPlayer = ({ src, isOutbound = false }: {
     const handleSeek = useCallback((e: React.MouseEvent) => {
         const audio = audioRef.current
         const container = waveformRef.current
-        if (!audio || !container || !duration) return
+        if (!audio || !container || !displayDuration) return
         const rect = container.getBoundingClientRect()
         const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-        audio.currentTime = ratio * duration
+        audio.currentTime = ratio * displayDuration
         setCurrentTime(audio.currentTime)
-    }, [duration])
+    }, [displayDuration])
 
     const cycleSpeed = useCallback(() => {
         const next = (speedIdx + 1) % SPEEDS.length
@@ -148,7 +150,7 @@ export const AudioPlayer = ({ src, isOutbound = false }: {
                         'text-[10px] tabular-nums',
                         isOutbound ? 'text-primary-foreground/70' : 'text-muted-foreground'
                     )}>
-                        {playing || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
+                        {playing || currentTime > 0 ? formatTime(currentTime) : formatTime(displayDuration)}
                     </span>
 
                     <button
