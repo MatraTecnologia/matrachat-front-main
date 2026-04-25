@@ -10,6 +10,7 @@ import {
     Bot,
     Users,
     BarChart2,
+    FileBarChart2,
     Megaphone,
     BookOpen,
     Settings,
@@ -358,13 +359,24 @@ function SidebarContent({
                 'flex flex-1 flex-col gap-0.5 overflow-y-auto',
                 expanded ? 'items-stretch' : 'items-center'
             )}>
-                {/* Relatórios */}
+                {/* Dashboard */}
                 {permissions?.permissions.canViewDashboard !== false && (
                     <NavItem
                         href="/dashboard"
                         icon={BarChart2}
-                        label="Relatórios"
+                        label="Dashboard"
                         active={pathname.startsWith('/dashboard')}
+                        expanded={expanded}
+                    />
+                )}
+
+                {/* Relatórios de agente */}
+                {permissions?.permissions.canViewDashboard !== false && (
+                    <NavItem
+                        href="/relatorios"
+                        icon={FileBarChart2}
+                        label="Relatórios"
+                        active={pathname.startsWith('/relatorios')}
                         expanded={expanded}
                     />
                 )}
