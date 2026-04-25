@@ -116,7 +116,7 @@ function KpiCard({
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function RelatoriosPage() {
-    const { permissions } = usePermissions()
+    const { data: permissions } = usePermissions()
 
     const today = new Date().toISOString().slice(0, 10)
     const thirtyDaysAgo = subDays(new Date(), 30).toISOString().slice(0, 10)
