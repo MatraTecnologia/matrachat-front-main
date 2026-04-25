@@ -165,25 +165,27 @@ export default function RelatoriosPage() {
         if (!reportRef.current || !data) return
         setExporting(true)
         try {
-            const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+            const [{ default: jsPDF }, { toPng }] = await Promise.all([
                 import('jspdf'),
-                import('html2canvas'),
+                import('html-to-image'),
             ])
 
-            const canvas = await html2canvas(reportRef.current, {
-                scale: 2,
-                useCORS: true,
+            // html-to-image renderiza via SVG foreignObject, suportando oklch/lab do Tailwind v4
+            const imgData = await toPng(reportRef.current, {
+                pixelRatio: 2,
                 backgroundColor: '#ffffff',
-                logging: false,
+                style: { fontFamily: 'sans-serif' },
             })
 
-            const imgData = canvas.toDataURL('image/png')
-            const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' })
+            const img = new Image()
+            img.src = imgData
+            await new Promise<void>((resolve) => { img.onload = () => resolve() })
 
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: 'a4' })
             const pageW = pdf.internal.pageSize.getWidth()
             const pageH = pdf.internal.pageSize.getHeight()
-            const ratio = pageW / canvas.width
-            const scaledH = canvas.height * ratio
+            const ratio = pageW / img.width
+            const scaledH = img.height * ratio
 
             let heightLeft = scaledH
             let position = 0
